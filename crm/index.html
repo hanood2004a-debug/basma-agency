@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<base href="/crm/">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>لوحة المؤشرات | Basma CRM</title>
+<link rel="icon" type="image/png" href="../assets/basma-logo-navbar.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/crm.css">
+</head>
+<body class="crm-body">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="assets/crm-client.js"></script>
+<script>
+(function () {
+  "use strict";
+  var CRM = window.Basma.CRM;
+  var STAGE_LABELS = { new: "جديد", contacted: "تم التواصل", qualified: "مؤهل", meeting_scheduled: "اجتماع مجدول", proposal_sent: "أُرسل العرض", negotiation: "تفاوض", won: "فاز", lost: "خسر" };
+  var trendLeadsCache = [];
+  var trendBucketsCache = null; // used when crm_dashboard_snapshot() RPC is available
+  var FALLBACK_LEADS_CAP = 3000, FALLBACK_TASKS_CAP = 1000;
+
+  // ---------- Small, dependency-free chart helpers (same visual language
+  // as the existing distribution bars — no chart library, real data only,
+  // kept intentionally lightweight so the dashboard stays fast). ----------
+
+  function distBar(rows, labelKey) {
+    if (!rows.length) return '<p class="crm-muted" style="font-size:13px">لا توجد بيانات كافية بعد.</p>';
+    var max = Math.max.apply(null, rows.map(function (r) { return r.count; }));
+    return rows.map(function (r) {
+      var pct = max ? Math.round((r.count / max) * 100) : 0;
+      return '<div style="margin-bottom:10px">' +
+        '<div class="crm-flex-between" style="font-size:12.5px;margin-bottom:4px"><span>' + CRM.escape(r[labelKey] || "غير محدد") + '</span><strong style="color:#fbf7f0">' + r.count + '</strong></div>' +
+        '<div style="height:6px;border-radius:4px;background:rgba(255,255,255,.06)"><div style="height:100%;border-radius:4px;background:var(--crm-gold);width:' + pct + '%"></div></div>' +
+        '</div>';
+    }).join("");
+  }
+
+  function valueBar(rows, labelKey) {
+    if (!rows.length) return '<p class="crm-muted" style="font-size:13px">لا توجد بيانات كافية بعد.</p>';
+    var max = Math.max.apply(null, rows.map(function (r) { return r.value; }));
+    return rows.map(function (r) {
+      var pct = max ? Math.round((r.value / max) * 100) : 0;
+      return '<div style="margin-bottom:10px">' +
+        '<div class="crm-flex-between" style="font-size:12.5px;margin-bottom:4px"><span>' + CRM.escape(r[labelKey] || "غير محدد") + '</span><strong style="color:#fbf7f0">' + CRM.formatMoney(r.value, "USD") + '</strong></div>' +
+        '<div style="height:6px;border-radius:4px;background:rgba(255,255,255,.06)"><div style="height:100%;border-radius:4px;background:var(--crm-gold);width:' + pct + '%"></div></div>' +
+        '</div>';
+    }).join("");
+  }
+
+  function groupCount(list, key) {
+    var map = {};
+    list.forEach(function (row) {
+      var k = row[key] || "غير محدد";
+      map[k] = (map[k] || 0) + 1;
+    });
+    return Object.keys(map).map(function (k) {
+      var obj = {}; obj[key] = k; obj.count = map[k]; return obj;
+    }).sort(function (a, b) { return b.count - a.count; }).slice(0, 8);
+  }
+
+  function groupValue(list, key, valueField) {
+    var map = {};
+    list.forEach(function (row) {
+      var k = row[key] || "غير محدد";
+      map[k] = (map[k] || 0) + Number(row[valueField] || 0);
+    });
+    return Object.keys(map).map(function (k) {
+      var obj = {}; obj[key] = k; obj.value = map[k]; return obj;
+    }).sort(function (a, b) { return b.value - a.value; }).slice(0, 8);
+  }
+
+  function wonLostBar(won, lost) {
+    var total = won + lost;
+    if (!total) return '<p class="crm-muted" style="font-size:13px">لا توجد صفقات مغلقة بعد.</p>';
+    var wonPct = Math.round((won / total) * 100);
+    var lostPct = 100 - wonPct;
+    return '<div style="height:14px;border-radius:8px;overflow:hidden;display:flex">' +
+      '<div style="width:' + wonPct + '%;background:var(--crm-success)"></div>' +
+      '<div style="width:' + lostPct + '%;background:var(--crm-danger)"></div>' +
+      "</div>" +
+      '<div class="crm-flex-between" style="margin-top:10px;font-size:12.5px">' +
+      '<span><span class="crm-badge crm-badge-success">فاز</span> ' + won + " (" + wonPct + "%)</span>" +
+      '<span><span class="crm-badge crm-badge-danger">خسر</span> ' + lost + " (" + lostPct + "%)</span>" +
+      "</div>";
+  }
+
+  function trendChartHtml(leads, days) {
+    var buckets = [];
+    for (var i = days - 1; i >= 0; i--) {
+      var d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - i);
+      buckets.push({ key: d.toISOString().slice(0, 10), date: new Date(d), count: 0 });
+    }
+    var map = {};
+    buckets.forEach(function (b) { map[b.key] = b; });
+    leads.forEach(function (l) {
+      var k = (l.created_at || "").slice(0, 10);
+      if (map[k]) map[k].count++;
+    });
+    var max = Math.max(1, Math.max.apply(null, buckets.map(function (b) { return b.count; })));
+    var bars = buckets.map(function (b) {
+      var pct = Math.max(Math.round((b.count / max) * 100), b.count > 0 ? 6 : 0);
+      return '<div title="' + CRM.formatDate(b.date) + ': ' + b.count + '" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;min-width:2px">' +
+        '<div style="width:100%;max-width:' + (days > 14 ? 8 : 16) + 'px;height:64px;display:flex;align-items:flex-end;background:rgba(255,255,255,.04);border-radius:3px;overflow:hidden">' +
+        '<div style="width:100%;height:' + pct + '%;background:var(--crm-gold)"></div></div>' +
+        "</div>";
+    }).join("");
+    return '<div style="display:flex;gap:3px;align-items:flex-end">' + bars + "</div>" +
+      '<div class="crm-flex-between" style="margin-top:8px;font-size:11px;color:var(--crm-text-mute)"><span>' + CRM.formatDate(buckets[0].date) + '</span><span>مجموع الفترة: ' + buckets.reduce(function (s, b) { return s + b.count; }, 0) + '</span><span>' + CRM.formatDate(buckets[buckets.length - 1].date) + "</span></div>";
+  }
+
+  function trendChartHtmlFromBuckets(buckets30, days) {
+    var slice = buckets30.slice(Math.max(0, buckets30.length - days));
+    var max = Math.max(1, Math.max.apply(null, slice.map(function (b) { return b.count; })));
+    var bars = slice.map(function (b) {
+      var pct = Math.max(Math.round((b.count / max) * 100), b.count > 0 ? 6 : 0);
+      return '<div title="' + CRM.escape(b.day) + ': ' + b.count + '" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;min-width:2px">' +
+        '<div style="width:100%;max-width:' + (days > 14 ? 8 : 16) + 'px;height:64px;display:flex;align-items:flex-end;background:rgba(255,255,255,.04);border-radius:3px;overflow:hidden">' +
+        '<div style="width:100%;height:' + pct + '%;background:var(--crm-gold)"></div></div>' +
+        "</div>";
+    }).join("");
+    return '<div style="display:flex;gap:3px;align-items:flex-end">' + bars + "</div>" +
+      '<div class="crm-flex-between" style="margin-top:8px;font-size:11px;color:var(--crm-text-mute)"><span>' + CRM.escape(slice[0].day) + '</span><span>مجموع الفترة: ' + slice.reduce(function (s, b) { return s + b.count; }, 0) + '</span><span>' + CRM.escape(slice[slice.length - 1].day) + "</span></div>";
+  }
+
+  function renderTrend(days) {
+    var el = document.getElementById("crmTrendChart");
+    if (!el) return;
+    el.innerHTML = trendBucketsCache ? trendChartHtmlFromBuckets(trendBucketsCache, days) : trendChartHtml(trendLeadsCache, days);
+    document.querySelectorAll(".crm-trend-tab").forEach(function (btn) {
+      btn.classList.toggle("is-active", Number(btn.dataset.days) === days);
+    });
+  }
+
+  async function boot() {
+    var ctx = await CRM.boot({ activeKey: "dashboard", title: "لوحة المؤشرات", sub: "نظرة عامة سريعة على أداء المبيعات" });
+    if (!ctx) return;
+    var db = ctx.client;
+    var app = document.getElementById("crmApp");
+    app.innerHTML = '<div class="crm-loading">جارٍ تحميل المؤشرات…</div>';
+
+    try {
+      var now = new Date();
+      var nowIso = now.toISOString();
+      var todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+      var todayEnd = new Date(); todayEnd.setHours(23, 59, 59, 999);
+      var in24h = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+      var sevenDaysAgoDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+      var sevenDaysAgo = sevenDaysAgoDate.toISOString();
+      var usedFallback = false;
+
+      // ---- data section: prefer the single crm_dashboard_snapshot() RPC
+      // (one query, aggregated server-side, no full-table loads) and only
+      // fall back to bounded per-table fetches if the function hasn't been
+      // deployed yet (CRM-SALES-OPS-UPGRADE.sql not run in Supabase). ----
+      var totalLeads, kOpenLeads, kLeadsToday, kLeadsThisWeek, kWebsiteToday, kBookingsToday,
+        kMeetingsToday, kMeetingsUpcoming, kMeetingsNext24h, kTasksDueToday, kTasksOverdue,
+        kWon, kLost, kPipelineValue, kWeightedPipelineValue, kAvgDeal, kConversion,
+        kFollowUpsToday, kOverdueFollowUps, kStaleLeads;
+      var bySourceRows, byServiceRows, byStageRows, byCountryRows, valueByStageRows, recentActivities;
+
+      var snapRes = await db.rpc("crm_dashboard_snapshot");
+      if (!snapRes.error && snapRes.data) {
+        var snap = snapRes.data;
+        var k = snap.kpis || {};
+        totalLeads = Number(snap.total_leads || 0);
+        kOpenLeads = Number(k.open_leads || 0);
+        kLeadsToday = Number(k.leads_today || 0);
+        kLeadsThisWeek = Number(k.leads_this_week || 0);
+        kWebsiteToday = Number(k.website_leads_today || 0);
+        kBookingsToday = Number(k.bookings_today || 0);
+        kMeetingsToday = Number(k.meetings_today || 0);
+        kMeetingsUpcoming = Number(k.meetings_upcoming || 0);
+        kMeetingsNext24h = Number(k.meetings_next_24h || 0);
+        kTasksDueToday = Number(k.tasks_due_today || 0);
+        kTasksOverdue = Number(k.tasks_overdue || 0);
+        kWon = Number(k.won_deals || 0);
+        kLost = Number(k.lost_deals || 0);
+        kPipelineValue = Number(k.pipeline_value || 0);
+        kWeightedPipelineValue = Number(k.weighted_pipeline_value || 0);
+        kAvgDeal = Number(k.avg_deal_value || 0);
+        kConversion = Number(k.conversion_rate || 0);
+        kFollowUpsToday = Number(k.follow_ups_today || 0);
+        kOverdueFollowUps = Number(k.overdue_follow_ups || 0);
+        kStaleLeads = Number(k.stale_leads_7d || 0);
+        bySourceRows = snap.by_source || [];
+        byServiceRows = snap.by_service || [];
+        byStageRows = (snap.by_stage || []).map(function (r) { return { stageLabel: STAGE_LABELS[r.stage] || r.stage, count: r.count }; });
+        byCountryRows = snap.by_country || [];
+        valueByStageRows = (snap.value_by_stage || []).map(function (r) { return { stageLabel: STAGE_LABELS[r.stage] || r.stage, value: Number(r.value || 0) }; });
+        recentActivities = snap.recent_activities || [];
+        trendBucketsCache = snap.trend_30d || null;
+      } else {
+        // Fallback path — crm_dashboard_snapshot() not deployed yet. Still
+        // bounded (not a true "load all records" scan): capped at
+        // FALLBACK_LEADS_CAP / FALLBACK_TASKS_CAP, most-recent-first, with a
+        // banner disclosing the cap. Once CRM-SALES-OPS-UPGRADE.sql is run
+        // this whole branch stops being used.
+        usedFallback = true;
+        var leadsRes = await db.from("crm_leads")
+          .select("id,status,stage,estimated_value,probability,source,service_interest,country,next_follow_up_at,last_contact_at,created_at,title")
+          .order("created_at", { ascending: false })
+          .limit(FALLBACK_LEADS_CAP);
+        if (leadsRes.error) throw leadsRes.error;
+        var leads = leadsRes.data || [];
+        trendLeadsCache = leads;
+
+        var tasksRes = await db.from("crm_tasks").select("id,title,due_at,status,priority").neq("status", "completed").neq("status", "cancelled").limit(FALLBACK_TASKS_CAP);
+        if (tasksRes.error) throw tasksRes.error;
+        var openTasks = tasksRes.data || [];
+
+        var meetingsRes = await db.from("crm_meetings").select("id,title,scheduled_at,status").eq("status", "scheduled").gte("scheduled_at", nowIso).order("scheduled_at", { ascending: true }).limit(50);
+        if (meetingsRes.error) throw meetingsRes.error;
+        var upcomingMeetings = meetingsRes.data || [];
+
+        var activitiesRes = await db.from("crm_activities").select("id,subject,activity_type,activity_at,created_at").order("created_at", { ascending: false }).limit(8);
+        if (activitiesRes.error) throw activitiesRes.error;
+        recentActivities = activitiesRes.data || [];
+
+        totalLeads = leads.length;
+        var openLeads = leads.filter(function (l) { return l.status === "open"; });
+        var wonLeads = leads.filter(function (l) { return l.status === "won"; });
+        var lostLeads = leads.filter(function (l) { return l.status === "lost"; });
+        var closedCount = wonLeads.length + lostLeads.length;
+
+        kOpenLeads = openLeads.length;
+        kWon = wonLeads.length;
+        kLost = lostLeads.length;
+        kConversion = closedCount ? Math.round((wonLeads.length / closedCount) * 100) : 0;
+        kPipelineValue = openLeads.reduce(function (sum, l) { return sum + Number(l.estimated_value || 0); }, 0);
+        kWeightedPipelineValue = openLeads.reduce(function (sum, l) { return sum + Number(l.estimated_value || 0) * (Number(l.probability || 0) / 100); }, 0);
+        kAvgDeal = wonLeads.length ? wonLeads.reduce(function (s, l) { return s + Number(l.estimated_value || 0); }, 0) / wonLeads.length : 0;
+
+        var leadsToday = leads.filter(function (l) { return l.created_at && new Date(l.created_at) >= todayStart && new Date(l.created_at) <= todayEnd; });
+        var leadsThisWeek = leads.filter(function (l) { return l.created_at && new Date(l.created_at) >= sevenDaysAgoDate; });
+        kLeadsToday = leadsToday.length;
+        kLeadsThisWeek = leadsThisWeek.length;
+        kWebsiteToday = leadsToday.filter(function (l) { return l.source === "Website"; }).length;
+        kBookingsToday = leadsToday.filter(function (l) { return l.source === "Website Booking"; }).length;
+
+        var overdueTasks = openTasks.filter(function (t) { return t.due_at && new Date(t.due_at) < now; });
+        var tasksDueToday = openTasks.filter(function (t) { return t.due_at && new Date(t.due_at) >= todayStart && new Date(t.due_at) <= todayEnd; });
+        var meetingsToday = upcomingMeetings.filter(function (m) { return new Date(m.scheduled_at) <= todayEnd; });
+        kTasksOverdue = overdueTasks.length;
+        kTasksDueToday = tasksDueToday.length;
+        kMeetingsToday = meetingsToday.length;
+        kMeetingsUpcoming = upcomingMeetings.length;
+        kMeetingsNext24h = upcomingMeetings.filter(function (m) { return m.scheduled_at <= in24h; }).length;
+
+        var followUpsToday = leads.filter(function (l) {
+          if (!l.next_follow_up_at) return false;
+          var d = new Date(l.next_follow_up_at);
+          return d >= todayStart && d <= todayEnd;
+        });
+        kFollowUpsToday = followUpsToday.length;
+        kOverdueFollowUps = leads.filter(function (l) { return l.next_follow_up_at && new Date(l.next_follow_up_at) < todayStart && l.status === "open"; }).length;
+        kStaleLeads = leads.filter(function (l) { return l.status === "open" && (!l.last_contact_at || l.last_contact_at < sevenDaysAgo); }).length;
+
+        var leadsWithStageLabel = leads.map(function (l) { return { stageLabel: STAGE_LABELS[l.stage] || l.stage }; });
+        var openLeadsWithStageLabel = openLeads.map(function (l) { return { stageLabel: STAGE_LABELS[l.stage] || l.stage, estimated_value: l.estimated_value }; });
+        bySourceRows = groupCount(leads, "source");
+        byServiceRows = groupCount(leads, "service_interest");
+        byStageRows = groupCount(leadsWithStageLabel, "stageLabel");
+        byCountryRows = groupCount(leads, "country");
+        valueByStageRows = groupValue(openLeadsWithStageLabel, "stageLabel", "estimated_value");
+        trendBucketsCache = null;
+      }
+
+      var alerts = [];
+      if (kFollowUpsToday) alerts.push({ kind: "info", text: kFollowUpsToday + " متابعة مستحقة اليوم." });
+      if (kOverdueFollowUps) alerts.push({ kind: "warning", text: kOverdueFollowUps + " متابعة متأخرة تحتاج إجراء." });
+      if (kTasksOverdue) alerts.push({ kind: "danger", text: kTasksOverdue + " مهمة متأخرة عن موعدها." });
+      if (kMeetingsNext24h) alerts.push({ kind: "info", text: kMeetingsNext24h + " اجتماع خلال 24 ساعة القادمة." });
+      if (kStaleLeads) alerts.push({ kind: "warning", text: kStaleLeads + " Lead بدون أي نشاط منذ 7 أيام أو أكثر." });
+
+      var alertsHtml = alerts.length
+        ? alerts.map(function (a) { return '<div class="crm-alert crm-alert-' + a.kind + '">' + a.text + "</div>"; }).join("")
+        : '<p class="crm-muted" style="font-size:13px">لا توجد تنبيهات حالياً. كل شيء تحت السيطرة.</p>';
+
+      var kpis = [
+        { label: "الصفقات المفتوحة", value: kOpenLeads },
+        { label: "Leads اليوم", value: kLeadsToday },
+        { label: "Leads هذا الأسبوع", value: kLeadsThisWeek },
+        { label: "Leads جديدة من الموقع (اليوم)", value: kWebsiteToday },
+        { label: "حجوزات جديدة (اليوم)", value: kBookingsToday },
+        { label: "اجتماعات اليوم", value: kMeetingsToday },
+        { label: "اجتماعات قادمة", value: kMeetingsUpcoming },
+        { label: "مهام مستحقة اليوم", value: kTasksDueToday },
+        { label: "مهام متأخرة", value: kTasksOverdue },
+        { label: "قيمة الفرص المفتوحة", value: CRM.formatMoney(kPipelineValue, "USD") },
+        { label: "القيمة المرجّحة للمسار", value: CRM.formatMoney(kWeightedPipelineValue, "USD") },
+        { label: "الصفقات الفائزة", value: kWon },
+        { label: "الصفقات الخاسرة", value: kLost },
+        { label: "نسبة التحويل (فوز)", value: kConversion + "%" },
+        { label: "متوسط قيمة الصفقة", value: CRM.formatMoney(kAvgDeal, "USD") }
+      ];
+
+      var kpiHtml = kpis.map(function (k2) {
+        return '<div class="crm-kpi"><span>' + k2.label + "</span><strong>" + k2.value + "</strong></div>";
+      }).join("");
+
+      var activityLabels = { note: "ملاحظة", call: "مكالمة", email: "بريد", whatsapp: "واتساب", meeting: "اجتماع", follow_up: "متابعة", status_change: "تغيير مرحلة", proposal: "عرض سعر" };
+      var activityHtml = recentActivities.length
+        ? '<div class="crm-table-wrap"><table class="crm-table"><thead><tr><th>النوع</th><th>الموضوع</th><th>التاريخ</th></tr></thead><tbody>' +
+          recentActivities.map(function (a) {
+            return "<tr><td><span class=\"crm-badge crm-badge-gold\">" + (activityLabels[a.activity_type] || a.activity_type) + "</span></td><td>" + CRM.escape(a.subject) + "</td><td>" + CRM.formatDateTime(a.activity_at || a.created_at) + "</td></tr>";
+          }).join("") + "</tbody></table></div>"
+        : '<div class="crm-empty"><p>لا توجد نشاطات مسجّلة بعد.</p></div>';
+
+      if (!totalLeads) {
+        app.innerHTML =
+          '<div class="crm-card crm-empty">' +
+          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M4 4h16v16H4zM8 4v16M4 10h4"/></svg>' +
+          "<h2 style=\"color:#fbf7f0\">لا توجد بيانات بعد</h2>" +
+          "<p>ابدأ بإضافة أول عميل محتمل من صفحة العملاء المحتملين لتظهر المؤشرات هنا.</p>" +
+          '<a href="leads.html" class="crm-btn crm-btn-primary" style="margin-top:14px">إضافة Lead جديد</a>' +
+          "</div>";
+        return;
+      }
+
+      var fallbackBanner = usedFallback
+        ? '<div class="crm-alert crm-alert-warning">لوحة المؤشرات تعمل في وضع احتياطي محدود (أحدث ' + FALLBACK_LEADS_CAP + ' عميلاً). شغّل CRM-SALES-OPS-UPGRADE.sql لتفعيل المؤشرات الكاملة والمُحسّنة.</div>'
+        : "";
+
+      app.innerHTML =
+        fallbackBanner +
+        '<section class="crm-kpi-grid">' + kpiHtml + "</section>" +
+
+        '<section class="crm-card"><div class="crm-section-title"><h2>التنبيهات</h2></div>' + alertsHtml + "</section>" +
+
+        '<section class="crm-grid-2">' +
+        '<div class="crm-card"><div class="crm-section-title"><h2>Leads حسب المصدر</h2></div>' + distBar(bySourceRows, "source") + "</div>" +
+        '<div class="crm-card"><div class="crm-section-title"><h2>Leads حسب الخدمة</h2></div>' + distBar(byServiceRows, "service_interest") + "</div>" +
+        "</section>" +
+
+        '<section class="crm-grid-2">' +
+        '<div class="crm-card"><div class="crm-section-title"><h2>Leads حسب المرحلة</h2></div>' + distBar(byStageRows, "stageLabel") + "</div>" +
+        '<div class="crm-card"><div class="crm-section-title"><h2>قيمة المسار حسب المرحلة</h2></div>' + valueBar(valueByStageRows, "stageLabel") + "</div>" +
+        "</section>" +
+
+        '<section class="crm-grid-2">' +
+        '<div class="crm-card"><div class="crm-section-title"><h2>Leads حسب الدولة</h2></div>' + distBar(byCountryRows, "country") + "</div>" +
+        '<div class="crm-card"><div class="crm-section-title"><h2>توزيع الفوز/الخسارة</h2></div>' + wonLostBar(kWon, kLost) + "</div>" +
+        "</section>" +
+
+        '<section class="crm-card">' +
+        '<div class="crm-section-title"><h2>Leads جديدة عبر الزمن</h2>' +
+        '<div style="display:flex;gap:6px">' +
+        '<button class="crm-btn crm-btn-sm crm-trend-tab is-active" data-days="7">7 أيام</button>' +
+        '<button class="crm-btn crm-btn-sm crm-trend-tab" data-days="30">30 يومًا</button>' +
+        "</div></div>" +
+        '<div id="crmTrendChart"></div>' +
+        "</section>" +
+
+        '<section class="crm-card"><div class="crm-section-title"><h2>أحدث النشاطات</h2></div>' + activityHtml + "</section>";
+
+      renderTrend(7);
+      document.querySelectorAll(".crm-trend-tab").forEach(function (btn) {
+        btn.addEventListener("click", function () { renderTrend(Number(btn.dataset.days)); });
+      });
+    } catch (err) {
+      app.innerHTML = '<div class="crm-alert crm-alert-danger">تعذّر تحميل بيانات اللوحة: ' + CRM.escape(err.message || "") + "</div>";
+    }
+  }
+
+  boot();
+})();
+</script>
+</body>
+</html>

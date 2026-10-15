@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>تفاصيل Lead | Basma CRM</title>
+<link rel="icon" type="image/png" href="../assets/basma-logo-navbar.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/crm.css">
+</head>
+<body class="crm-body">
+
+<div class="crm-modal-overlay" id="crmActivityModalOverlay">
+  <div class="crm-modal">
+    <h3 id="crmActivityModalTitle">تسجيل نشاط</h3>
+    <form id="crmActivityForm">
+      <input type="hidden" id="actType">
+      <div class="crm-field"><label for="actSubject">الموضوع *</label><input id="actSubject" required></div>
+      <div class="crm-field" style="margin-top:12px"><label for="actDetails">تفاصيل</label><textarea id="actDetails"></textarea></div>
+      <div class="crm-form-actions">
+        <button type="button" class="crm-btn" data-close>إلغاء</button>
+        <button type="submit" class="crm-btn crm-btn-primary">حفظ</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="crm-modal-overlay" id="crmTaskModalOverlay">
+  <div class="crm-modal">
+    <h3>مهمة جديدة</h3>
+    <form id="crmTaskForm">
+      <div class="crm-field"><label for="taskTitle">العنوان *</label><input id="taskTitle" required></div>
+      <div class="crm-form-grid" style="margin-top:12px">
+        <div class="crm-field"><label for="taskPriority">الأولوية</label><select id="taskPriority"><option value="low">منخفضة</option><option value="medium" selected>متوسطة</option><option value="high">عالية</option><option value="urgent">عاجلة</option></select></div>
+        <div class="crm-field"><label for="taskDue">تاريخ الاستحقاق</label><input id="taskDue" type="datetime-local"></div>
+      </div>
+      <div class="crm-field" style="margin-top:12px"><label for="taskDesc">الوصف</label><textarea id="taskDesc"></textarea></div>
+      <div class="crm-form-actions">
+        <button type="button" class="crm-btn" data-close>إلغاء</button>
+        <button type="submit" class="crm-btn crm-btn-primary">حفظ</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="crm-modal-overlay" id="crmMeetingModalOverlay">
+  <div class="crm-modal">
+    <h3>جدولة اجتماع</h3>
+    <form id="crmMeetingForm">
+      <div class="crm-field"><label for="mtTitle">العنوان *</label><input id="mtTitle" required></div>
+      <div class="crm-form-grid" style="margin-top:12px">
+        <div class="crm-field"><label for="mtType">النوع</label><select id="mtType"><option value="call">مكالمة</option><option value="online" selected>عن بعد</option><option value="in_person">حضوري</option></select></div>
+        <div class="crm-field"><label for="mtWhen">الموعد *</label><input id="mtWhen" type="datetime-local" required></div>
+        <div class="crm-field"><label for="mtDuration">المدة (دقيقة)</label><input id="mtDuration" type="number" min="5" value="30"></div>
+        <div class="crm-field"><label for="mtLocation">المكان / الرابط</label><input id="mtLocation"></div>
+      </div>
+      <div class="crm-field" style="margin-top:12px"><label for="mtNotes">ملاحظات</label><textarea id="mtNotes"></textarea></div>
+      <div class="crm-form-actions">
+        <button type="button" class="crm-btn" data-close>إلغاء</button>
+        <button type="submit" class="crm-btn crm-btn-primary">حفظ</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="crm-modal-overlay" id="crmEditModalOverlay">
+  <div class="crm-modal">
+    <h3>تعديل بيانات Lead</h3>
+    <form id="crmEditForm">
+      <div class="crm-form-grid">
+        <div class="crm-field"><label for="edStage">المرحلة</label>
+          <select id="edStage"><option value="new">جديد</option><option value="contacted">تم التواصل</option><option value="qualified">مؤهل</option><option value="meeting_scheduled">اجتماع مجدول</option><option value="proposal_sent">أرسل العرض</option><option value="negotiation">تفاوض</option><option value="won">فاز</option><option value="lost">خسر</option></select>
+        </div>
+        <div class="crm-field"><label for="edPriority">الأولوية</label><select id="edPriority"><option value="low">منخفضة</option><option value="medium">متوسطة</option><option value="high">عالية</option><option value="urgent">عاجلة</option></select></div>
+        <div class="crm-field"><label for="edValue">القيمة المتوقعة</label><input id="edValue" type="number" min="0" step="0.01"></div>
+        <div class="crm-field"><label for="edCurrency">العملة</label><input id="edCurrency"></div>
+        <div class="crm-field"><label for="edFollowUp">المتابعة القادمة</label><input id="edFollowUp" type="datetime-local"></div>
+      </div>
+      <div class="crm-field" style="margin-top:12px"><label for="edNotes">ملاحظات Lead</label><textarea id="edNotes"></textarea></div>
+      <div class="crm-form-actions">
+        <button type="button" class="crm-btn" data-close>إلغاء</button>
+        <button type="submit" class="crm-btn crm-btn-primary">حفظ</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="assets/crm-client.js"></script>
+<script src="assets/crm-composer.js"></script>
+<script>
+(function () {
+  "use strict";
+  var CRM = window.Basma.CRM;
+  var STAGE_LABELS = { new: "جديد", contacted: "تم التواصل", qualified: "مؤهل", meeting_scheduled: "اجتماع مجدول", proposal_sent: "أرسل العرض", negotiation: "تفاوض", won: "فاز", lost: "خسر" };
+  var STAGE_PROBABILITY = { new: 10, contacted: 20, qualified: 35, meeting_scheduled: 50, proposal_sent: 65, negotiation: 80, won: 100, lost: 0 };
+  var ACTIVITY_LABELS = { note: "ملاحظة", call: "مكالمة", email: "بريد", whatsapp: "واتساب", meeting: "اجتماع", follow_up: "متابعة", status_change: "تغيير مرحلة", proposal: "عرض سعر", linkedin: "LinkedIn", company_imported: "استيراد الشركة", contact_added: "جهة اتصال جديدة" };
+  var PRIORITY_LABELS = { low: "منخفضة", medium: "متوسطة", high: "عالية", urgent: "عاجلة" };
+  var TASK_STATUS_LABELS = { pending: "قيد الانتظار", in_progress: "قيد التنفيذ", completed: "مكتملة", cancelled: "ملغاة" };
+  var MEETING_TYPE_LABELS = { call: "مكالمة", online: "عن بعد", in_person: "حضوري" };
+  var MEETING_STATUS_LABELS = { scheduled: "مجدول", completed: "منتهٍ", cancelled: "ملغى", rescheduled: "أُعيدت جدولته" };
+  var PROPOSAL_STATUS_LABELS = { draft: "مسودة", sent: "أُرسل", viewed: "تمت مشاهدته", accepted: "مقبول", rejected: "مرفوض", expired: "منتهي الصلاحية" };
+  var leadId = new URLSearchParams(window.location.search).get("id");
+  var db, who, lead = null, company = null, contact = null;
+  var timelineSort = "desc";
+
+  function q(id) { return document.getElementById(id); }
+  function openOverlay(id) { q(id).classList.add("is-open"); }
+  function closeOverlay(id) { q(id).classList.remove("is-open"); }
+  document.addEventListener("click", function (e) {
+    if (e.target.matches("[data-close]")) { e.target.closest(".crm-modal-overlay").classList.remove("is-open"); }
+  });
+
+  async function reloadLead() {
+    var res = await db.from("crm_leads").select("*").eq("id", leadId).single();
+    if (res.error) throw res.error;
+    lead = res.data;
+    if (lead.company_id) { var c = await db.from("crm_companies").select("*").eq("id", lead.company_id).maybeSingle(); company = c.data; } else company = null;
+    if (lead.contact_id) { var p = await db.from("crm_contacts").select("*").eq("id", lead.contact_id).maybeSingle(); contact = p.data; } else contact = null;
+    renderHeader();
+  }
+
+  function renderHeader() {
+    document.getElementById("crmTopbarActions").innerHTML = "";
+    var canWrite = who.can_write;
+    var head = document.getElementById("crmLeadHead");
+    head.innerHTML =
+      '<div class="crm-flex-between">' +
+      "<div><h2 style=\"font-size:20px\">" + CRM.escape(lead.title) + "</h2>" +
+      '<div class="crm-muted" style="margin-top:4px">' + CRM.escape((company && company.name) || "بدون شركة") + (contact ? " · " + CRM.escape(contact.full_name) : "") + "</div></div>" +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+      '<span class="crm-badge crm-badge-gold">' + (STAGE_LABELS[lead.stage] || lead.stage) + "</span>" +
+      (canWrite ? '<button class="crm-btn crm-btn-sm" id="crmEditLeadBtn">تعديل</button>' : "") +
+      "</div></div>" +
+      '<div class="crm-form-grid" style="margin-top:16px;font-size:13.5px">' +
+      infoItem("الخدمة", lead.service_interest) +
+      infoItem("الدولة", lead.country) +
+      infoItem("القيمة والعملة", CRM.formatMoney(lead.estimated_value, lead.currency)) +
+      infoItem("الأولوية", lead.priority) +
+      infoItem("المصدر", lead.source) +
+      infoItem("آخر تواصل", CRM.formatDate(lead.last_contact_at)) +
+      infoItem("المتابعة القادمة", CRM.formatDate(lead.next_follow_up_at)) +
+      infoItem("احتمالية الفوز", (lead.probability || 0) + "%") +
+      "</div>";
+
+    if (canWrite) {
+      document.getElementById("crmEditLeadBtn").addEventListener("click", function () {
+        q("edStage").value = lead.stage; q("edPriority").value = lead.priority;
+        q("edValue").value = lead.estimated_value; q("edCurrency").value = lead.currency;
+        q("edFollowUp").value = lead.next_follow_up_at ? lead.next_follow_up_at.slice(0, 16) : "";
+        q("edNotes").value = "";
+        openOverlay("crmEditModalOverlay");
+      });
+    }
+
+    var actions = document.getElementById("crmQuickActions");
+    if (canWrite) {
+      // v1.7 production hardening (audit item #8 — status/history
+      // consistency): the old free-text "تسجيل Email"/"تسجيل WhatsApp"
+      // quick-log buttons wrote ONLY to crm_activities, completely
+      // bypassing crm_outreach_messages — the same "log a call/email/
+      // whatsapp" pattern company-details.html already removed in favor of
+      // the Unified Communication Composer (see that file's own comment).
+      // lead-details.html never got the equivalent cleanup, so an activity
+      // logged this way showed up in this lead's own timeline but was
+      // invisible to Company 360's Communication History, the Outreach
+      // Dashboard KPIs, and campaign metrics — a real canonical-source
+      // split, not just a cosmetic duplicate. Least-destructive fix: hide
+      // these two buttons ONLY when the proper Composer is actually
+      // available (i.e. the lead has a linked company — same precondition
+      // "📧 تواصل" already requires), so the one remaining legitimate use
+      // of the legacy modal for email/whatsapp (a lead with no company
+      // yet) still works exactly as before. "تسجيل مكالمة" (phone — never
+      // part of the Composer's scope, see crm-composer.js's own header
+      // comment) and "إضافة ملاحظة" (a note was never a "sent message" in
+      // the first place) are both untouched.
+      actions.innerHTML =
+        (company ? '<button class="crm-btn crm-btn-sm crm-btn-primary" id="crmQuickCommunicate">📧 تواصل (بريد/واتساب/LinkedIn)</button>' : "") +
+        '<button class="crm-btn crm-btn-sm" data-act="call">تسجيل مكالمة</button>' +
+        (company ? "" : '<button class="crm-btn crm-btn-sm" data-act="email">تسجيل Email</button>') +
+        (company ? "" : '<button class="crm-btn crm-btn-sm" data-act="whatsapp">تسجيل WhatsApp</button>') +
+        '<button class="crm-btn crm-btn-sm" data-act="note">إضافة ملاحظة</button>' +
+        '<button class="crm-btn crm-btn-sm" id="crmQuickTask">إنشاء مهمة</button>' +
+        '<button class="crm-btn crm-btn-sm" id="crmQuickMeeting">جدولة اجتماع</button>' +
+        '<a class="crm-btn crm-btn-sm" href="proposals.html?lead_id=' + leadId + '&new=1">إنشاء عرض سعر</a>';
+      if (company) {
+        document.getElementById("crmQuickCommunicate").addEventListener("click", async function () {
+          var contacts = [];
+          if (contact) contacts = [contact];
+          else {
+            try { var cr = await db.from("crm_contacts").select("*").eq("company_id", company.id); contacts = cr.data || []; } catch (e) { /* composer degrades gracefully */ }
+          }
+          window.Basma.Composer.open({
+            db: db, company: company, contacts: contacts, defaultContactId: contact ? contact.id : null,
+            leadId: leadId, onSent: function () { reloadLead(); }
+          });
+        });
+      }
+      actions.querySelectorAll("[data-act]").forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          var type = btn.dataset.act;
+          var titles = { call: "تسجيل مكالمة", email: "تسجيل بريد إلكتروني", whatsapp: "تسجيل رسالة واتساب", note: "إضافة ملاحظة" };
+          document.getElementById("crmActivityModalTitle").textContent = titles[type];
+          q("actType").value = type; q("actSubject").value = ""; q("actDetails").value = "";
+          openOverlay("crmActivityModalOverlay");
+        });
+      });
+      document.getElementById("crmQuickTask").addEventListener("click", function () {
+        q("taskTitle").value = ""; q("taskDue").value = ""; q("taskDesc").value = ""; q("taskPriority").value = "medium";
+        openOverlay("crmTaskModalOverlay");
+      });
+      document.getElementById("crmQuickMeeting").addEventListener("click", function () {
+        q("mtTitle").value = ""; q("mtWhen").value = ""; q("mtLocation").value = ""; q("mtNotes").value = ""; q("mtDuration").value = 30;
+        openOverlay("crmMeetingModalOverlay");
+      });
+    } else {
+      actions.innerHTML = '<p class="crm-muted" style="font-size:12.5px">وضع القراءة فقط — لا تملك صلاحية إضافة نشاطات.</p>';
+    }
+  }
+
+  function infoItem(label, value) {
+    return '<div><span class="crm-muted" style="font-size:11.5px">' + label + "</span><div>" + CRM.escape(value || "—") + "</div></div>";
+  }
+
+  // ---- Tabs ----
+  var TABS = [
+    { key: "timeline", label: "الجدول الزمني" },
+    { key: "activity", label: "سجل النشاطات" },
+    { key: "tasks", label: "المهام" },
+    { key: "meetings", label: "الاجتماعات" },
+    { key: "proposals", label: "عروض الأسعار" },
+    { key: "notes", label: "الملاحظات" }
+  ];
+
+  // ---- Timeline (Phase 3): a pure read-time MERGE of data that already
+  // lives in crm_activities / crm_tasks / crm_meetings / crm_proposals plus
+  // one synthetic "Lead created" entry derived from lead.created_at. No new
+  // table, no new writes, nothing duplicated — this only combines existing
+  // rows into one chronological view.
+  function activityKind(type) {
+    if (type === "note") return "mute";
+    return "gold";
+  }
+  function proposalKind(status) {
+    if (status === "accepted") return "success";
+    if (status === "rejected" || status === "expired") return "danger";
+    return "gold";
+  }
+  function timelineItemHtml(e) {
+    return '<div class="crm-timeline-item">' +
+      '<div class="crm-timeline-dot crm-badge-' + e.kind + '"></div>' +
+      '<div class="crm-timeline-body"><div class="crm-flex-between"><strong>' + CRM.escape(e.title) + '</strong><span class="crm-muted" style="font-size:11px">' + CRM.formatDateTime(e.ts) + '</span></div>' +
+      (e.desc ? '<p class="crm-muted" style="margin:4px 0 0;font-size:13px">' + CRM.escape(e.desc) + "</p>" : "") +
+      "</div></div>";
+  }
+
+  async function loadTimelineData() {
+    var events = [];
+    var originLabel = "تم إنشاء Lead";
+    if (lead.source === "Website") originLabel = "تم استلام استفسار من نموذج الموقع";
+    else if (lead.source === "Website Booking") originLabel = "تم إنشاء Lead من حجز استشارة عبر الموقع";
+    events.push({ ts: lead.created_at, title: originLabel, desc: lead.title, kind: "gold" });
+
+    // Capped per-lead (not a "load all records" scan of a global table, but
+    // still bounded defensively in case a single long-lived lead accumulates
+    // an unusually large history) — most recent TIMELINE_CAP of each type.
+    var TIMELINE_CAP = 200;
+    var results = await Promise.all([
+      db.from("crm_activities").select("*").eq("lead_id", leadId).order("created_at", { ascending: false }).limit(TIMELINE_CAP),
+      db.from("crm_tasks").select("*").eq("lead_id", leadId).order("created_at", { ascending: false }).limit(TIMELINE_CAP),
+      db.from("crm_meetings").select("*").eq("lead_id", leadId).order("created_at", { ascending: false }).limit(TIMELINE_CAP),
+      db.from("crm_proposals").select("*").eq("lead_id", leadId).order("created_at", { ascending: false }).limit(TIMELINE_CAP)
+    ]);
+    var acts = results[0].data || [], tasksData = results[1].data || [], meetingsData = results[2].data || [], proposalsData = results[3].data || [];
+
+    acts.forEach(function (a) {
+      events.push({ ts: a.activity_at || a.created_at, title: ACTIVITY_LABELS[a.activity_type] || a.activity_type, desc: a.subject + (a.details ? " — " + a.details : ""), kind: activityKind(a.activity_type) });
+    });
+
+    tasksData.forEach(function (t) {
+      events.push({ ts: t.created_at, title: "مهمة جديدة: " + t.title, desc: "الأولوية: " + (PRIORITY_LABELS[t.priority] || t.priority) + (t.due_at ? " · الاستحقاق: " + CRM.formatDate(t.due_at) : ""), kind: "gold" });
+      if (t.completed_at) events.push({ ts: t.completed_at, title: "اكتملت المهمة: " + t.title, desc: "", kind: "success" });
+    });
+
+    meetingsData.forEach(function (m) {
+      events.push({ ts: m.created_at, title: "اجتماع مجدول: " + m.title, desc: CRM.formatDateTime(m.scheduled_at) + " · " + (MEETING_TYPE_LABELS[m.meeting_type] || m.meeting_type || ""), kind: "gold" });
+      if (m.status === "completed") events.push({ ts: m.updated_at, title: "انتهى الاجتماع: " + m.title, desc: "", kind: "success" });
+      if (m.status === "cancelled") events.push({ ts: m.updated_at, title: "أُلغي الاجتماع: " + m.title, desc: "", kind: "danger" });
+    });
+
+    proposalsData.forEach(function (p) {
+      events.push({ ts: p.created_at, title: "عرض سعر جديد: " + p.proposal_number, desc: p.title + " · " + CRM.formatMoney(p.total, p.currency), kind: "gold" });
+      if (p.status !== "draft") {
+        events.push({ ts: p.updated_at, title: "الحالة الحالية للعرض: " + (PROPOSAL_STATUS_LABELS[p.status] || p.status), desc: p.proposal_number + " (لا يوجد سجل تاريخي كامل لكل تغيير حالة — هذه آخر حالة معروفة)", kind: proposalKind(p.status) });
+      }
+    });
+
+    events = events.filter(function (e) { return e.ts; }).sort(function (a, b) {
+      return timelineSort === "desc" ? new Date(b.ts) - new Date(a.ts) : new Date(a.ts) - new Date(b.ts);
+    });
+
+    if (!events.length) return emptyTab("لا توجد أحداث بعد.");
+    return '<div style="display:flex;justify-content:flex-end;margin-bottom:12px">' +
+      '<button class="crm-btn crm-btn-sm" id="crmTimelineSort">' + (timelineSort === "desc" ? "الأقدم أولاً" : "الأحدث أولاً") + "</button></div>" +
+      '<div class="crm-timeline">' + events.map(timelineItemHtml).join("") + "</div>";
+  }
+
+  async function renderTimelinePanel(panelEl) {
+    panelEl.innerHTML = await loadTimelineData();
+    var sortBtn = panelEl.querySelector("#crmTimelineSort");
+    if (sortBtn) sortBtn.addEventListener("click", async function () {
+      timelineSort = timelineSort === "desc" ? "asc" : "desc";
+      await renderTimelinePanel(panelEl);
+    });
+  }
+
+  async function loadTabData(key) {
+    var TAB_CAP = 200;
+    if (key === "activity") {
+      var r = await db.from("crm_activities").select("*").eq("lead_id", leadId).order("created_at", { ascending: false }).limit(TAB_CAP);
+      return (r.data || []).map(function (a) {
+        return '<div class="crm-card" style="padding:12px 14px"><div class="crm-flex-between"><span class="crm-badge crm-badge-gold">' + (ACTIVITY_LABELS[a.activity_type] || a.activity_type) + "</span><span class=\"crm-muted\" style=\"font-size:11.5px\">" + CRM.formatDateTime(a.activity_at || a.created_at) + "</span></div>" +
+          "<strong style=\"display:block;margin-top:6px;color:#fbf7f0\">" + CRM.escape(a.subject) + "</strong>" +
+          (a.details ? '<p class="crm-muted" style="margin:4px 0 0;font-size:13px">' + CRM.escape(a.details) + "</p>" : "") + "</div>";
+      }).join("") || emptyTab("لا توجد نشاطات مسجّلة بعد.");
+    }
+    if (key === "notes") {
+      var rn = await db.from("crm_activities").select("*").eq("lead_id", leadId).eq("activity_type", "note").order("created_at", { ascending: false }).limit(TAB_CAP);
+      return (rn.data || []).map(function (a) {
+        return '<div class="crm-card" style="padding:12px 14px"><div class="crm-muted" style="font-size:11.5px">' + CRM.formatDateTime(a.created_at) + "</div><p style=\"margin:6px 0 0\">" + CRM.escape(a.details || a.subject) + "</p></div>";
+      }).join("") || emptyTab("لا توجد ملاحظات بعد.");
+    }
+    if (key === "tasks") {
+      var rt = await db.from("crm_tasks").select("*").eq("lead_id", leadId).order("due_at", { ascending: true, nullsFirst: false }).limit(TAB_CAP);
+      if (!rt.data || !rt.data.length) return emptyTab("لا توجد مهام مرتبطة بهذا الـ Lead.");
+      return '<div class="crm-table-wrap"><table class="crm-table"><thead><tr><th>العنوان</th><th>الأولوية</th><th>الاستحقاق</th><th>الحالة</th></tr></thead><tbody>' +
+        rt.data.map(function (t) {
+          var overdue = t.due_at && new Date(t.due_at) < new Date() && t.status !== "completed" && t.status !== "cancelled";
+          return "<tr><td>" + CRM.escape(t.title) + "</td><td>" + CRM.escape(PRIORITY_LABELS[t.priority] || t.priority) + "</td><td>" + (overdue ? '<span class="crm-badge crm-badge-danger">متأخرة</span> ' : "") + CRM.formatDate(t.due_at) + "</td><td>" + CRM.escape(TASK_STATUS_LABELS[t.status] || t.status) + "</td></tr>";
+        }).join("") + "</tbody></table></div>";
+    }
+    if (key === "meetings") {
+      var rm = await db.from("crm_meetings").select("*").eq("lead_id", leadId).order("scheduled_at", { ascending: false }).limit(TAB_CAP);
+      if (!rm.data || !rm.data.length) return emptyTab("لا توجد اجتماعات مرتبطة بهذا الـ Lead.");
+      return '<div class="crm-table-wrap"><table class="crm-table"><thead><tr><th>العنوان</th><th>النوع</th><th>الموعد</th><th>الحالة</th></tr></thead><tbody>' +
+        rm.data.map(function (m) {
+          return "<tr><td>" + CRM.escape(m.title) + "</td><td>" + CRM.escape(MEETING_TYPE_LABELS[m.meeting_type] || m.meeting_type || "—") + "</td><td>" + CRM.formatDateTime(m.scheduled_at) + "</td><td>" + CRM.escape(MEETING_STATUS_LABELS[m.status] || m.status) + "</td></tr>";
+        }).join("") + "</tbody></table></div>";
+    }
+    if (key === "proposals") {
+      var rp = await db.from("crm_proposals").select("*").eq("lead_id", leadId).order("created_at", { ascending: false }).limit(TAB_CAP);
+      if (!rp.data || !rp.data.length) return emptyTab("لا توجد عروض أسعار لهذا الـ Lead.");
+      return '<div class="crm-table-wrap"><table class="crm-table"><thead><tr><th>الرقم</th><th>العنوان</th><th>الحالة</th><th>الإجمالي</th></tr></thead><tbody>' +
+        rp.data.map(function (p) {
+          return "<tr><td><a href=\"proposal-print.html?id=" + p.id + "\" style=\"color:var(--crm-gold)\">" + CRM.escape(p.proposal_number) + "</a></td><td>" + CRM.escape(p.title) + "</td><td>" + CRM.escape(PROPOSAL_STATUS_LABELS[p.status] || p.status) + "</td><td>" + CRM.formatMoney(p.total, p.currency) + "</td></tr>";
+        }).join("") + "</tbody></table></div>";
+    }
+    return "";
+  }
+  function emptyTab(msg) { return '<div class="crm-empty"><p>' + msg + "</p></div>"; }
+
+  async function renderTabs() {
+    var container = document.getElementById("crmTabsSection");
+    container.innerHTML =
+      '<div class="crm-tabs" id="crmTabButtons">' + TABS.map(function (t, i) { return '<button data-key="' + t.key + '" class="' + (i === 0 ? "is-active" : "") + '">' + t.label + "</button>"; }).join("") + "</div>" +
+      TABS.map(function (t, i) { return '<div class="crm-tab-panel' + (i === 0 ? " is-active" : "") + '" data-panel="' + t.key + '"><div class="crm-loading">جارٍ التحميل…</div></div>'; }).join("");
+
+    var buttons = container.querySelectorAll("#crmTabButtons button");
+    buttons.forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        buttons.forEach(function (b) { b.classList.remove("is-active"); });
+        btn.classList.add("is-active");
+        container.querySelectorAll(".crm-tab-panel").forEach(function (p) { p.classList.toggle("is-active", p.dataset.panel === btn.dataset.key); });
+      });
+    });
+
+    for (var i = 0; i < TABS.length; i++) {
+      var key = TABS[i].key;
+      var panel = container.querySelector('[data-panel="' + key + '"]');
+      if (key === "timeline") { await renderTimelinePanel(panel); continue; }
+      var html = await loadTabData(key);
+      panel.innerHTML = html;
+    }
+  }
+
+  async function logActivity(type, subject, details) {
+    var res = await db.from("crm_activities").insert({ lead_id: leadId, activity_type: type, subject: subject, details: details || null }).select().single();
+    if (res.error) throw res.error;
+    if (["call", "email", "whatsapp", "meeting"].includes(type)) {
+      await db.from("crm_leads").update({ last_contact_at: new Date().toISOString() }).eq("id", leadId);
+    }
+    return res.data;
+  }
+
+  // ---- WhatsApp activity: notification + wa.me deep link (does not touch
+  // the schema — reuses crm_notifications' existing columns and the newly
+  // widened 'whatsapp_logged' type value). ----
+  function onlyDigits(v) { return (v || "").replace(/[^\d]/g, ""); }
+
+  // Cascade: linked contact's dedicated whatsapp field, then their phone,
+  // then the linked company's phone. Not specified explicitly by the user —
+  // disclosed in the final report.
+  function resolveWhatsappNumber() {
+    var raw = (contact && (contact.whatsapp || contact.phone)) || (company && company.phone) || "";
+    var digits = onlyDigits(raw);
+    return digits || null;
+  }
+
+  // Best-effort: a failure here must never surface as a failed save, since
+  // the activity itself already saved successfully by the time this runs.
+  async function notifyWhatsappLogged(activity) {
+    try {
+      var link = lead.company_id ? ("company-details.html?id=" + lead.company_id) : ("lead-details.html?id=" + leadId);
+      var res = await db.from("crm_notifications").insert({
+        type: "whatsapp_logged",
+        title: "تم تسجيل رسالة واتساب",
+        description: company ? company.name : lead.title,
+        lead_id: leadId,
+        company_id: lead.company_id || null,
+        link: link,
+        dedupe_key: "whatsapp_logged:" + activity.id,
+        is_read: false
+      });
+      if (res.error) console.warn("WhatsApp notification insert failed:", res.error.message);
+    } catch (err) { console.warn("WhatsApp notification insert failed:", err); }
+  }
+
+  function wireForms() {
+    document.getElementById("crmActivityForm").addEventListener("submit", async function (e) {
+      e.preventDefault();
+      var type = q("actType").value;
+      var subject = q("actSubject").value.trim();
+      var details = q("actDetails").value.trim();
+      try {
+        var activity = await logActivity(type, subject, details);
+        closeOverlay("crmActivityModalOverlay");
+
+        if (type === "whatsapp") {
+          // Notification + deep-link are both best-effort extras on top of
+          // an already-successful save — neither can roll back or block it.
+          await notifyWhatsappLogged(activity);
+          var number = resolveWhatsappNumber();
+          if (number) {
+            var waText = encodeURIComponent(subject + (details ? "\n" + details : ""));
+            window.open("https://wa.me/" + number + "?text=" + waText, "_blank", "noopener");
+            CRM.toast("تم التسجيل.", "info");
+          } else {
+            CRM.toast("تم حفظ النشاط ولكن لا يوجد رقم واتساب.", "warning");
+          }
+        } else {
+          CRM.toast("تم التسجيل.", "info");
+        }
+        await reloadLead(); await renderTabs();
+      } catch (err) { CRM.toast("تعذّر الحفظ: " + (err.message || ""), "danger"); }
+    });
+
+    document.getElementById("crmTaskForm").addEventListener("submit", async function (e) {
+      e.preventDefault();
+      try {
+        var res = await db.from("crm_tasks").insert({
+          lead_id: leadId, title: q("taskTitle").value.trim(), priority: q("taskPriority").value,
+          due_at: q("taskDue").value || null, description: q("taskDesc").value.trim() || null
+        });
+        if (res.error) throw res.error;
+        closeOverlay("crmTaskModalOverlay");
+        CRM.toast("تم إنشاء المهمة.", "info");
+        await renderTabs();
+      } catch (err) { CRM.toast("تعذّر الحفظ: " + (err.message || ""), "danger"); }
+    });
+
+    document.getElementById("crmMeetingForm").addEventListener("submit", async function (e) {
+      e.preventDefault();
+      if (!q("mtWhen").value) { CRM.toast("حدّد موعد الاجتماع.", "danger"); return; }
+      try {
+        var res = await db.from("crm_meetings").insert({
+          lead_id: leadId, title: q("mtTitle").value.trim(), meeting_type: q("mtType").value,
+          scheduled_at: new Date(q("mtWhen").value).toISOString(), duration_minutes: Number(q("mtDuration").value || 30),
+          location_or_link: q("mtLocation").value.trim() || null, notes: q("mtNotes").value.trim() || null
+        });
+        if (res.error) throw res.error;
+        await logActivity("meeting", "تمت جدولة اجتماع: " + q("mtTitle").value.trim());
+        closeOverlay("crmMeetingModalOverlay");
+        CRM.toast("تم جدولة الاجتماع.", "info");
+        await reloadLead(); await renderTabs();
+      } catch (err) { CRM.toast("تعذّر الحفظ: " + (err.message || ""), "danger"); }
+    });
+
+    document.getElementById("crmEditForm").addEventListener("submit", async function (e) {
+      e.preventDefault();
+      try {
+        var previousStage = lead ? lead.stage : null;
+        var newStage = q("edStage").value;
+        var updatePayload = {
+          stage: newStage, priority: q("edPriority").value,
+          estimated_value: Number(q("edValue").value || 0), currency: q("edCurrency").value.trim() || "USD",
+          next_follow_up_at: q("edFollowUp").value || null
+        };
+        if (STAGE_PROBABILITY.hasOwnProperty(newStage)) updatePayload.probability = STAGE_PROBABILITY[newStage];
+        var res = await db.from("crm_leads").update(updatePayload).eq("id", leadId);
+        if (res.error) throw res.error;
+        if (previousStage && previousStage !== newStage) {
+          await logActivity("status_change", "تغيير المرحلة إلى: " + (STAGE_LABELS[newStage] || newStage));
+        }
+        var newNote = q("edNotes").value.trim();
+        if (newNote) {
+          await logActivity("note", "ملاحظة", newNote);
+          q("edNotes").value = "";
+        }
+        closeOverlay("crmEditModalOverlay");
+        CRM.toast("تم التحديث.", "info");
+        await reloadLead(); await renderTabs();
+      } catch (err) { CRM.toast("تعذّر الحفظ: " + (err.message || ""), "danger"); }
+    });
+  }
+
+  async function boot() {
+    if (!leadId) { document.body.innerHTML = '<div class="crm-alert crm-alert-danger" style="margin:30px">لم يتم تحديد Lead.</div>'; return; }
+    var ctx = await CRM.boot({ activeKey: "leads", title: "تفاصيل Lead", sub: "" });
+    if (!ctx) return;
+    db = ctx.client; who = ctx.who;
+    document.getElementById("crmApp").innerHTML =
+      '<div class="crm-card" id="crmLeadHead"><div class="crm-loading">جارٍ التحميل…</div></div>' +
+      '<div class="crm-card" id="crmQuickActionsWrap"><div class="crm-section-title"><h2>إجراءات سريعة</h2></div><div style="display:flex;gap:8px;flex-wrap:wrap" id="crmQuickActions"></div></div>' +
+      '<div class="crm-card" id="crmTabsSection"></div>';
+
+    wireForms();
+    try {
+      await reloadLead();
+      await renderTabs();
+    } catch (err) {
+      document.getElementById("crmApp").innerHTML = '<div class="crm-alert crm-alert-danger">تعذّر تحميل بيانات الـ Lead: ' + CRM.escape(err.message || "") + "</div>";
+    }
+  }
+
+  boot();
+})();
+</script>
+</body>
+</html>

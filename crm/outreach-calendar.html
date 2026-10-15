@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>تقويم المتابعات | Basma CRM</title>
+<link rel="icon" type="image/png" href="../assets/basma-logo-navbar.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/crm.css">
+<style>
+  .crm-cal-grid { display: grid; grid-template-columns: repeat(7, minmax(90px, 1fr)); gap: 6px; min-width: 700px; }
+  .crm-cal-head { text-align: center; font-size: 12px; color: var(--crm-text-mute); padding: 6px 0; }
+  .crm-cal-cell { min-height: 84px; border: 1px solid var(--crm-border); border-radius: 8px; padding: 6px; background: var(--crm-panel-2); }
+  .crm-cal-cell.is-today { border-color: var(--crm-gold); }
+  .crm-cal-cell.is-outside { opacity: .35; }
+  .crm-cal-daynum { font-size: 12px; color: var(--crm-text-mute); margin-bottom: 4px; }
+  .crm-cal-chip { display: block; font-size: 11px; padding: 2px 6px; border-radius: 6px; background: var(--crm-gold-soft); color: var(--crm-gold); margin-bottom: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-decoration: none; }
+  .crm-cal-chip.is-overdue { background: var(--crm-danger-soft); color: var(--crm-danger); }
+  .crm-cal-more { font-size: 10.5px; color: var(--crm-text-mute); }
+</style>
+</head>
+<body class="crm-body">
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="assets/crm-client.js"></script>
+<script>
+(function () {
+  "use strict";
+  var CRM = window.Basma.CRM;
+  var db;
+  var viewDate = new Date(); viewDate.setDate(1); viewDate.setHours(0, 0, 0, 0);
+  var MONTH_NAMES = ["يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو", "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر"];
+  var DAY_NAMES = ["أحد", "اثنين", "ثلاثاء", "أربعاء", "خميس", "جمعة", "سبت"];
+  var PRIORITY_LABELS = { low: "منخفضة", medium: "متوسطة", high: "عالية", urgent: "عاجلة" };
+
+  function renderBlocked() {
+    document.getElementById("crmApp").innerHTML =
+      '<div class="crm-card crm-empty">' +
+      '<h2 style="color:#fbf7f0">تقويم المتابعات غير مُفعّل بعد</h2>' +
+      '<p>جدول <code>crm_outreach</code> غير موجود بعد. شغّل ملف <code>CRM-OUTREACH-HUB.sql</code> في محرر SQL في Supabase أولًا، ثم أعد تحميل هذه الصفحة.</p>' +
+      "</div>";
+  }
+  function isMigrationMissingError(err) {
+    var msg = (err && err.message) || "";
+    return /crm_outreach/i.test(msg) && (/does not exist/i.test(msg) || /schema cache/i.test(msg) || (err && err.code === "42P01"));
+  }
+
+  function ymd(d) { return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }
+
+  function renderMonthLabel() {
+    document.getElementById("crmCalMonthLabel").textContent = MONTH_NAMES[viewDate.getMonth()] + " " + viewDate.getFullYear();
+  }
+
+  function renderGrid(items) {
+    var byDate = {};
+    items.forEach(function (it) {
+      var k = it.outreach.next_follow_up_date;
+      (byDate[k] = byDate[k] || []).push(it);
+    });
+    var firstOfMonth = new Date(viewDate);
+    var gridStart = new Date(firstOfMonth); gridStart.setDate(gridStart.getDate() - gridStart.getDay());
+    var todayKey = ymd(new Date());
+    var cells = [];
+    for (var i = 0; i < 42; i++) {
+      var d = new Date(gridStart); d.setDate(gridStart.getDate() + i);
+      var key = ymd(d);
+      var isOutside = d.getMonth() !== viewDate.getMonth();
+      var dayItems = byDate[key] || [];
+      var chips = dayItems.slice(0, 3).map(function (it) {
+        var isOverdue = key < todayKey;
+        return '<a class="crm-cal-chip' + (isOverdue ? " is-overdue" : "") + '" href="company-details.html?id=' + it.id + '" title="' + CRM.escape(it.name) + '">' + CRM.escape(it.name) + "</a>";
+      }).join("");
+      var more = dayItems.length > 3 ? '<div class="crm-cal-more">+' + (dayItems.length - 3) + " أخرى</div>" : "";
+      cells.push('<div class="crm-cal-cell' + (isOutside ? " is-outside" : "") + (key === todayKey ? " is-today" : "") + '"><div class="crm-cal-daynum">' + d.getDate() + "</div>" + chips + more + "</div>");
+    }
+    var head = DAY_NAMES.map(function (n) { return '<div class="crm-cal-head">' + n + "</div>"; }).join("");
+    document.getElementById("crmCalGrid").innerHTML = head + cells.join("");
+  }
+
+  function renderAgenda(items) {
+    var wrap = document.getElementById("crmAgendaList"), empty = document.getElementById("crmAgendaEmpty");
+    if (!items.length) { wrap.innerHTML = ""; empty.style.display = "block"; return; }
+    empty.style.display = "none";
+    var todayKey = ymd(new Date());
+    wrap.innerHTML = items.map(function (it) {
+      var o = it.outreach;
+      var isOverdue = o.next_follow_up_date < todayKey;
+      var isToday = o.next_follow_up_date === todayKey;
+      var badge = isOverdue ? "danger" : (isToday ? "warning" : "mute");
+      return '<div class="crm-flex-between" style="padding:10px 0;border-bottom:1px solid var(--crm-border)">' +
+        '<div><a href="company-details.html?id=' + it.id + '" style="color:var(--crm-gold);font-weight:600">' + CRM.escape(it.name) + "</a>" +
+        '<div class="crm-muted" style="font-size:12px;margin-top:2px">' + CRM.escape(PRIORITY_LABELS[o.priority] || o.priority || "") + (it.industry ? " · " + CRM.escape(it.industry) : "") + "</div></div>" +
+        '<span class="crm-badge crm-badge-' + badge + '">' + CRM.formatDate(o.next_follow_up_date) + (o.next_follow_up_time ? " " + String(o.next_follow_up_time).slice(0, 5) : "") + "</span>" +
+        "</div>";
+    }).join("");
+  }
+
+  async function loadMonth() {
+    var start = new Date(viewDate); start.setDate(start.getDate() - start.getDay());
+    var end = new Date(start); end.setDate(end.getDate() + 42);
+    try {
+      var res = await db.from("crm_companies")
+        .select("id,name,industry,outreach:crm_outreach!inner(next_follow_up_date,next_follow_up_time,priority)")
+        .gte("outreach.next_follow_up_date", ymd(start))
+        .lt("outreach.next_follow_up_date", ymd(end))
+        .limit(500);
+      if (res.error) throw res.error;
+      var items = (res.data || []).map(function (r) {
+        var o = Array.isArray(r.outreach) ? r.outreach[0] : r.outreach;
+        return { id: r.id, name: r.name, industry: r.industry, outreach: o };
+      }).filter(function (r) { return r.outreach && r.outreach.next_follow_up_date; });
+      renderGrid(items);
+    } catch (err) {
+      if (isMigrationMissingError(err)) { renderBlocked(); return; }
+      CRM.toast("تعذّر تحميل شهر التقويم: " + (err.message || ""), "danger");
+    }
+  }
+
+  async function loadAgenda() {
+    try {
+      var res = await db.from("crm_companies")
+        .select("id,name,industry,outreach:crm_outreach!inner(next_follow_up_date,next_follow_up_time,priority)")
+        .gte("outreach.next_follow_up_date", ymd(new Date(new Date().setDate(new Date().getDate() - 30))))
+        .limit(300);
+      if (res.error) throw res.error;
+      var items = (res.data || []).map(function (r) {
+        var o = Array.isArray(r.outreach) ? r.outreach[0] : r.outreach;
+        return { id: r.id, name: r.name, industry: r.industry, outreach: o };
+      }).filter(function (r) { return r.outreach && r.outreach.next_follow_up_date; });
+      items.sort(function (a, b) { return (a.outreach.next_follow_up_date + (a.outreach.next_follow_up_time || "")).localeCompare(b.outreach.next_follow_up_date + (b.outreach.next_follow_up_time || "")); });
+      renderAgenda(items.slice(0, 150));
+    } catch (err) {
+      if (isMigrationMissingError(err)) return; // already handled by loadMonth
+      CRM.toast("تعذّر تحميل قائمة المتابعات: " + (err.message || ""), "danger");
+    }
+  }
+
+  function goto(delta) {
+    viewDate.setMonth(viewDate.getMonth() + delta);
+    renderMonthLabel();
+    loadMonth();
+  }
+
+  async function boot() {
+    var ctx = await CRM.boot({ activeKey: "outreach-calendar", title: "تقويم المتابعات", sub: "كل مواعيد المتابعة القادمة والمتأخرة في مكان واحد" });
+    if (!ctx) return;
+    db = ctx.client;
+    document.getElementById("crmTopbarActions").innerHTML =
+      '<a class="crm-btn" href="outreach.html">قائمة التواصل</a> <a class="crm-btn" href="outreach-dashboard.html">لوحة التواصل</a>';
+
+    document.getElementById("crmApp").innerHTML =
+      '<div class="crm-card" style="margin-bottom:16px">' +
+      '<div class="crm-flex-between" style="margin-bottom:12px">' +
+      '<div class="crm-section-title" style="margin:0"><h2 id="crmCalMonthLabel"></h2></div>' +
+      '<div style="display:flex;gap:8px">' +
+      '<button class="crm-btn crm-btn-sm" id="crmCalPrev">‹ السابق</button>' +
+      '<button class="crm-btn crm-btn-sm" id="crmCalToday">اليوم</button>' +
+      '<button class="crm-btn crm-btn-sm" id="crmCalNext">التالي ›</button>' +
+      "</div></div>" +
+      '<div style="overflow-x:auto"><div class="crm-cal-grid" id="crmCalGrid"></div></div>' +
+      "</div>" +
+      '<div class="crm-card"><div class="crm-section-title"><h2>كل المتابعات (قائمة زمنية)</h2></div>' +
+      '<div id="crmAgendaList"></div>' +
+      '<div class="crm-empty" id="crmAgendaEmpty" style="display:none"><p>لا توجد متابعات مجدولة بعد.</p></div>' +
+      "</div>";
+
+    document.getElementById("crmCalPrev").addEventListener("click", function () { goto(-1); });
+    document.getElementById("crmCalNext").addEventListener("click", function () { goto(1); });
+    document.getElementById("crmCalToday").addEventListener("click", function () { viewDate = new Date(); viewDate.setDate(1); viewDate.setHours(0, 0, 0, 0); renderMonthLabel(); loadMonth(); });
+
+    renderMonthLabel();
+    await loadMonth();
+    await loadAgenda();
+  }
+
+  boot();
+})();
+</script>
+</body>
+</html>

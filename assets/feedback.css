@@ -1,0 +1,36 @@
+:root { --feedback-bg:#111e28; --feedback-card:#182630; --feedback-accent:#c9a98d; --feedback-text:#fbf7f0; --feedback-muted:#c8c2b7; }
+.basma-feedback-section { padding:72px 6%; background:#0d1720; color:var(--feedback-text); border-top:1px solid rgba(201,169,141,.18); direction:rtl; }
+.basma-feedback-inner { max-width:1180px; margin:auto; }
+.basma-feedback-heading { display:flex; justify-content:space-between; align-items:end; gap:24px; margin-bottom:28px; }
+.basma-feedback-heading h2 { margin:0; font-size:clamp(2rem,4vw,3.4rem); }
+.basma-feedback-summary { color:var(--feedback-accent); font-weight:700; white-space:nowrap; }
+.basma-feedback-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px; }
+.basma-feedback-card { background:var(--feedback-card); border:1px solid rgba(201,169,141,.25); border-radius:18px; padding:22px; min-height:170px; }
+.basma-feedback-card__top { display:flex; justify-content:space-between; gap:10px; align-items:center; }
+.basma-feedback-card__stars,.basma-feedback-stars { color:var(--feedback-accent); letter-spacing:2px; }
+.basma-feedback-verified { font-size:.75rem; color:var(--feedback-accent); border:1px solid currentColor; border-radius:999px; padding:3px 8px; }
+.basma-feedback-card p { color:var(--feedback-muted); line-height:1.75; }
+.basma-feedback-reply { border-inline-start:2px solid var(--feedback-accent); padding-inline-start:10px; font-size:.9rem; }
+.basma-feedback-empty { color:var(--feedback-muted); }
+.basma-feedback-section:has(.basma-feedback-empty) .basma-feedback-heading { flex-direction:column; align-items:center; text-align:center; }
+.basma-feedback-section:has(.basma-feedback-empty) .basma-feedback-summary { width:100%; text-align:center; }
+.basma-feedback-section:has(.basma-feedback-empty) .basma-feedback-grid { display:flex; justify-content:center; text-align:center; }
+.basma-feedback-modal[hidden] { display:none; }
+.basma-feedback-modal { position:fixed; inset:0; z-index:100000; display:grid; place-items:center; padding:20px; background:rgba(3,10,15,.76); backdrop-filter:blur(6px); direction:rtl; }
+.basma-feedback-dialog { width:min(520px,100%); background:var(--feedback-bg); color:var(--feedback-text); border:1px solid rgba(201,169,141,.45); border-radius:22px; padding:26px; box-shadow:0 24px 70px rgba(0,0,0,.42); }
+.basma-feedback-dialog h2 { margin:0 0 8px; }
+.basma-feedback-dialog p { color:var(--feedback-muted); }
+.basma-feedback-field { display:grid; gap:7px; margin:15px 0; }
+.basma-feedback-field input,.basma-feedback-field textarea,.basma-feedback-field select { width:100%; box-sizing:border-box; background:#0d1720; color:var(--feedback-text); border:1px solid rgba(201,169,141,.3); border-radius:10px; padding:12px; font:inherit; }
+.basma-feedback-field select:disabled { opacity:.6; cursor:not-allowed; }
+.basma-feedback-stars { display:flex; flex-direction:row-reverse; justify-content:flex-end; gap:4px; }
+.basma-feedback-stars input { position:absolute; opacity:0; pointer-events:none; }
+.basma-feedback-stars label { cursor:pointer; font-size:2rem; color:#66717a; transition:.2s; }
+.basma-feedback-stars input:checked ~ label,.basma-feedback-stars label:hover,.basma-feedback-stars label:hover ~ label { color:var(--feedback-accent); transform:translateY(-2px); }
+#basmaBookingModal .basma-feedback-dialog { max-height:88vh; overflow-y:auto; -webkit-overflow-scrolling:touch; }
+.basma-feedback-actions { display:flex; gap:12px; margin-top:18px; }
+.basma-feedback-submit,.basma-feedback-later { border-radius:10px; padding:12px 18px; font:inherit; font-weight:700; cursor:pointer; }
+.basma-feedback-submit { background:var(--feedback-accent); color:#10202a; border:1px solid var(--feedback-accent); }
+.basma-feedback-later { background:transparent; color:var(--feedback-text); border:1px solid rgba(251,247,240,.25); }
+.basma-feedback-status { min-height:24px; margin-top:10px; color:var(--feedback-accent); }
+@media (max-width:800px) { .basma-feedback-grid { grid-template-columns:1fr; } .basma-feedback-heading { align-items:start; flex-direction:column; } .basma-feedback-actions>* { flex:1; } }

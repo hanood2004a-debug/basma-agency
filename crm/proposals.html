@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>عروض الأسعار | Basma CRM</title>
+<link rel="icon" type="image/png" href="../assets/basma-logo-navbar.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/crm.css">
+<style>
+  .crm-item-row { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr auto; gap: 8px; align-items: end; margin-bottom: 10px; }
+  @media (max-width: 700px) { .crm-item-row { grid-template-columns: 1fr 1fr; } }
+</style>
+</head>
+<body class="crm-body">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="assets/crm-client.js"></script>
+<script>
+(function () {
+  "use strict";
+  var CRM = window.Basma.CRM;
+  var STATUS_LABELS = { draft: "مسودة", sent: "أُرسل", viewed: "تمت مشاهدته", accepted: "مقبول", rejected: "مرفوض", expired: "منتهي الصلاحية" };
+  var STATUS_BADGE = { draft: "mute", sent: "gold", viewed: "warning", accepted: "success", rejected: "danger", expired: "danger" };
+  var db, who, rows = [], leads = [], companies = [], items = [];
+  var filters = { q: "", status: "", companyOrLead: "" };
+  var PAGE_SIZE = 25, LOOKUP_CAP = 500, page = 0, totalCount = 0, searchDebounce = null;
+
+  function leadTitle(id) { var l = leads.filter(function (x) { return x.id === id; })[0]; return l ? l.title : null; }
+  function companyName(id) { var c = companies.filter(function (x) { return x.id === id; })[0]; return c ? c.name : null; }
+
+  function renderPagination() {
+    var el = document.getElementById("crmPagination");
+    if (!el) return;
+    if (!totalCount) { el.innerHTML = ""; return; }
+    var start = totalCount ? page * PAGE_SIZE + 1 : 0;
+    var end = Math.min(totalCount, (page + 1) * PAGE_SIZE);
+    var hasPrev = page > 0, hasNext = end < totalCount;
+    el.innerHTML =
+      '<div class="crm-pagination-controls">' +
+      '<button class="crm-btn crm-btn-sm" id="crmPagePrev"' + (hasPrev ? "" : " disabled") + '>السابق</button>' +
+      '<span class="crm-pagination-page">عرض ' + start + '–' + end + ' من ' + totalCount + '</span>' +
+      '<button class="crm-btn crm-btn-sm" id="crmPageNext"' + (hasNext ? "" : " disabled") + '>التالي</button>' +
+      "</div>";
+    if (hasPrev) document.getElementById("crmPagePrev").addEventListener("click", function () { page -= 1; load(); });
+    if (hasNext) document.getElementById("crmPageNext").addEventListener("click", function () { page += 1; load(); });
+  }
+
+  function renderList() {
+    var wrap = document.getElementById("crmTableWrap"), empty = document.getElementById("crmEmpty");
+    if (!rows.length) { wrap.style.display = "none"; empty.style.display = "block"; renderPagination(); return; }
+    wrap.style.display = "block"; empty.style.display = "none";
+    document.getElementById("crmTableBody").innerHTML = rows.map(function (p) {
+      return "<tr><td><strong>" + CRM.escape(p.proposal_number) + "</strong></td>" +
+        "<td>" + CRM.escape(p.title) + "<div class=\"crm-muted\" style=\"font-size:11px\">" + CRM.escape(companyName(p.company_id) || leadTitle(p.lead_id) || "—") + "</div></td>" +
+        "<td>" + (who.can_write ? statusSelect(p) : '<span class="crm-badge crm-badge-' + (STATUS_BADGE[p.status] || "mute") + '">' + (STATUS_LABELS[p.status] || p.status) + "</span>") + "</td>" +
+        "<td>" + CRM.formatMoney(p.total, p.currency) + "</td>" +
+        "<td>" + CRM.formatDate(p.valid_until) + "</td>" +
+        "<td style=\"white-space:nowrap;display:flex;gap:6px\"><a class=\"crm-btn crm-btn-sm\" href=\"proposal-print.html?id=" + p.id + "\" target=\"_blank\">عرض/طباعة</a>" +
+        (who.is_admin && p.status === "draft" ? "<button class=\"crm-btn crm-btn-sm crm-btn-danger crm-delete-btn\" data-id=\"" + p.id + "\">حذف</button>" : "") +
+        "</td></tr>";
+    }).join("");
+    document.querySelectorAll(".crm-status-select").forEach(function (sel) {
+      sel.addEventListener("change", async function () {
+        try {
+          var res = await db.from("crm_proposals").update({ status: sel.value }).eq("id", sel.dataset.id);
+          if (res.error) throw res.error;
+          CRM.toast("تم تحديث الحالة.", "info");
+        } catch (err) { CRM.toast("تعذّر التحديث: " + (err.message || ""), "danger"); }
+      });
+    });
+    document.querySelectorAll(".crm-delete-btn").forEach(function (btn) {
+      btn.addEventListener("click", function () { deleteProposal(btn.dataset.id); });
+    });
+    renderPagination();
+  }
+
+  async function deleteProposal(id) {
+    var p = rows.filter(function (x) { return x.id === id; })[0];
+    if (!p || p.status !== "draft") { CRM.toast("لا يمكن حذف إلا عروض الأسعار في حالة مسودة.", "danger"); return; }
+    if (!CRM.confirm("حذف عرض السعر " + p.proposal_number + " نهائيًا؟ هذا الإجراء لا يمكن التراجع عنه.")) return;
+    try {
+      var res = await db.from("crm_proposals").delete().eq("id", id).eq("status", "draft");
+      if (res.error) throw res.error;
+      CRM.toast("تم الحذف.", "info");
+      await load();
+    } catch (err) { CRM.toast("تعذّر الحذف: " + (err.message || ""), "danger"); }
+  }
+  function statusSelect(p) {
+    return '<select class="crm-status-select" data-id="' + p.id + '" style="background:var(--crm-panel-2);color:var(--crm-text);border:1px solid var(--crm-border);border-radius:8px;padding:6px 8px;font-size:12px">' +
+      Object.keys(STATUS_LABELS).map(function (s) { return '<option value="' + s + '"' + (s === p.status ? " selected" : "") + ">" + STATUS_LABELS[s] + "</option>"; }).join("") + "</select>";
+  }
+
+  function addItemRow(prefill) {
+    var container = document.getElementById("crmItemsList");
+    var row = document.createElement("div");
+    row.className = "crm-item-row";
+    row.innerHTML =
+      '<div class="crm-field"><label>الخدمة / البند</label><input class="it-name" value="' + CRM.escape((prefill && prefill.name) || "") + '"></div>' +
+      '<div class="crm-field"><label>الكمية</label><input class="it-qty" type="number" min="0.01" step="0.01" value="' + ((prefill && prefill.qty) || 1) + '"></div>' +
+      '<div class="crm-field"><label>سعر الوحدة</label><input class="it-price" type="number" min="0" step="0.01" value="' + ((prefill && prefill.price) || 0) + '"></div>' +
+      '<div class="crm-field"><label>الإجمالي</label><input class="it-total" type="number" value="0" readonly></div>' +
+      '<button type="button" class="crm-btn crm-btn-sm crm-btn-danger it-remove">حذف</button>';
+    container.appendChild(row);
+    row.querySelectorAll(".it-qty, .it-price").forEach(function (el) { el.addEventListener("input", recompute); });
+    row.querySelector(".it-remove").addEventListener("click", function () { row.remove(); recompute(); });
+    recompute();
+  }
+
+  function recompute() {
+    var subtotal = 0;
+    document.querySelectorAll(".crm-item-row").forEach(function (row) {
+      var qty = Number(row.querySelector(".it-qty").value || 0);
+      var price = Number(row.querySelector(".it-price").value || 0);
+      var total = qty * price;
+      row.querySelector(".it-total").value = total.toFixed(2);
+      subtotal += total;
+    });
+    var discount = Number(document.getElementById("bDiscount").value || 0);
+    document.getElementById("bSubtotal").textContent = CRM.formatMoney(subtotal, document.getElementById("bCurrency").value);
+    document.getElementById("bTotal").textContent = CRM.formatMoney(Math.max(0, subtotal - discount), document.getElementById("bCurrency").value);
+    return { subtotal: subtotal, total: Math.max(0, subtotal - discount) };
+  }
+
+  function openBuilder(prefillLeadId, prefillCompanyId) {
+    document.getElementById("crmBuilderWrap").style.display = "block";
+    document.getElementById("bTitle").value = "";
+    document.getElementById("bLead").value = prefillLeadId || "";
+    document.getElementById("bCompany").value = "";
+    if (prefillLeadId) {
+      var lead = leads.filter(function (l) { return l.id === prefillLeadId; })[0];
+      if (lead) {
+        document.getElementById("bTitle").value = "عرض سعر — " + lead.title;
+        document.getElementById("bCompany").value = lead.company_id || "";
+        document.getElementById("bCurrency").value = lead.currency || "USD";
+      }
+    } else if (prefillCompanyId) {
+      var comp = companies.filter(function (c) { return c.id === prefillCompanyId; })[0];
+      document.getElementById("bCompany").value = prefillCompanyId;
+      if (comp) document.getElementById("bTitle").value = "عرض سعر — " + comp.name;
+    }
+    document.getElementById("bValidUntil").value = "";
+    document.getElementById("bScope").value = "";
+    document.getElementById("bTerms").value = "المدة الزمنية للتنفيذ والدفعات تُحدد بحسب الاتفاق النهائي مع فريق بصمة.";
+    document.getElementById("bDiscount").value = 0;
+    document.getElementById("crmItemsList").innerHTML = "";
+    addItemRow();
+    window.scrollTo({ top: document.getElementById("crmBuilderWrap").offsetTop - 20, behavior: "smooth" });
+  }
+  function closeBuilder() { document.getElementById("crmBuilderWrap").style.display = "none"; }
+
+  async function saveProposal() {
+    var itemRows = Array.from(document.querySelectorAll(".crm-item-row")).map(function (row) {
+      return {
+        item_name: row.querySelector(".it-name").value.trim(),
+        quantity: Number(row.querySelector(".it-qty").value || 0),
+        unit_price: Number(row.querySelector(".it-price").value || 0),
+        total: Number(row.querySelector(".it-total").value || 0)
+      };
+    }).filter(function (i) { return i.item_name; });
+
+    var title = document.getElementById("bTitle").value.trim();
+    if (!title) { CRM.toast("عنوان العرض مطلوب.", "danger"); return; }
+    if (!itemRows.length) { CRM.toast("أضف بندًا واحدًا على الأقل.", "danger"); return; }
+
+    var totals = recompute();
+    var payload = {
+      lead_id: document.getElementById("bLead").value || null,
+      company_id: document.getElementById("bCompany").value || null,
+      title: title,
+      currency: document.getElementById("bCurrency").value.trim() || "USD",
+      subtotal: totals.subtotal,
+      discount: Number(document.getElementById("bDiscount").value || 0),
+      total: totals.total,
+      valid_until: document.getElementById("bValidUntil").value || null,
+      scope: document.getElementById("bScope").value.trim() || null,
+      terms: document.getElementById("bTerms").value.trim() || null,
+      status: "draft"
+    };
+
+    try {
+      var res = await db.from("crm_proposals").insert(payload).select().single();
+      if (res.error) throw res.error;
+      var proposalId = res.data.id;
+      var itemsPayload = itemRows.map(function (i, idx) { return Object.assign({}, i, { proposal_id: proposalId, sort_order: idx }); });
+      var itemsRes = await db.from("crm_proposal_items").insert(itemsPayload);
+      if (itemsRes.error) throw itemsRes.error;
+      if (payload.lead_id) {
+        await db.from("crm_activities").insert({ lead_id: payload.lead_id, activity_type: "proposal", subject: "تم إنشاء عرض سعر: " + res.data.proposal_number });
+      }
+      CRM.toast("تم إنشاء العرض " + res.data.proposal_number + ".", "info");
+      closeBuilder();
+      await load();
+    } catch (err) {
+      CRM.toast("تعذّر حفظ العرض: " + (err.message || ""), "danger");
+    }
+  }
+
+  function resetAndReload() { page = 0; load(); }
+
+  async function load() {
+    var q = filters.q.trim().replace(/[,()]/g, " ").replace(/\s+/g, " ").trim();
+    try {
+      var query = db.from("crm_proposals").select("*", { count: "exact" });
+      if (filters.status) query = query.eq("status", filters.status);
+      if (filters.companyOrLead) {
+        query = query.or("company_id.eq." + filters.companyOrLead + ",lead_id.eq." + filters.companyOrLead);
+      }
+      if (q) {
+        var companyIds = [], leadIds = [];
+        try {
+          var companyMatches = await db.from("crm_companies").select("id").ilike("name", "%" + q + "%").limit(200);
+          (companyMatches.data || []).forEach(function (c) { companyIds.push(c.id); });
+        } catch (e) { /* non-fatal */ }
+        try {
+          var leadMatches = await db.from("crm_leads").select("id").ilike("title", "%" + q + "%").limit(200);
+          (leadMatches.data || []).forEach(function (l) { leadIds.push(l.id); });
+        } catch (e) { /* non-fatal */ }
+        var orParts = ["proposal_number.ilike.%" + q + "%", "title.ilike.%" + q + "%"];
+        if (companyIds.length) orParts.push("company_id.in.(" + companyIds.join(",") + ")");
+        if (leadIds.length) orParts.push("lead_id.in.(" + leadIds.join(",") + ")");
+        query = query.or(orParts.join(","));
+      }
+      query = query.order("created_at", { ascending: false }).range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1);
+      var res = await query;
+      if (res.error) throw res.error;
+      rows = res.data || [];
+      totalCount = res.count || 0;
+      renderList();
+    } catch (err) { CRM.toast("تعذّر التحميل: " + (err.message || ""), "danger"); }
+  }
+
+  async function boot() {
+    var ctx = await CRM.boot({ activeKey: "proposals", title: "عروض الأسعار", sub: "بناء وإدارة عروض الأسعار بهوية بصمة" });
+    if (!ctx) return;
+    db = ctx.client; who = ctx.who;
+    document.getElementById("crmTopbarActions").innerHTML = who.can_write ? '<button class="crm-btn crm-btn-primary" id="crmAdd">+ عرض سعر جديد</button>' : "";
+
+    document.getElementById("crmApp").innerHTML =
+      '<div class="crm-card" id="crmBuilderWrap" style="display:none">' +
+      '<div class="crm-section-title"><h2>عرض سعر جديد</h2></div>' +
+      '<div class="crm-form-grid">' +
+      '<div class="crm-field"><label>عنوان العرض *</label><input id="bTitle"></div>' +
+      '<div class="crm-field"><label>مرتبط بـ Lead</label><select id="bLead"><option value="">— بدون —</option></select></div>' +
+      '<div class="crm-field"><label>الشركة</label><select id="bCompany"><option value="">— بدون —</option></select></div>' +
+      '<div class="crm-field"><label>العملة</label><input id="bCurrency" value="USD"></div>' +
+      '<div class="crm-field"><label>صالح حتى</label><input id="bValidUntil" type="date"></div>' +
+      '<div class="crm-field"><label>الخصم</label><input id="bDiscount" type="number" min="0" step="0.01" value="0"></div>' +
+      "</div>" +
+      '<div style="margin-top:16px"><div class="crm-section-title"><h2>البنود</h2><button type="button" class="crm-btn crm-btn-sm" id="bAddItem">+ إضافة بند</button></div>' +
+      '<div id="crmItemsList"></div></div>' +
+      '<div class="crm-form-grid" style="margin-top:14px">' +
+      '<div class="crm-field"><label>نطاق العمل</label><textarea id="bScope"></textarea></div>' +
+      '<div class="crm-field"><label>الشروط</label><textarea id="bTerms"></textarea></div>' +
+      "</div>" +
+      '<div class="crm-flex-between" style="margin-top:16px;border-top:1px solid var(--crm-border);padding-top:14px">' +
+      '<div><div class="crm-muted" style="font-size:12px">الإجمالي الفرعي: <strong id="bSubtotal" style="color:#fbf7f0">—</strong></div>' +
+      '<div class="crm-muted" style="font-size:12px;margin-top:4px">الإجمالي النهائي: <strong id="bTotal" style="color:var(--crm-gold)">—</strong></div></div>' +
+      '<div class="crm-form-actions" style="margin-top:0"><button type="button" class="crm-btn" id="bCancel">إلغاء</button><button type="button" class="crm-btn crm-btn-primary" id="bSave">حفظ العرض</button></div>' +
+      "</div></div>" +
+      '<div class="crm-card"><div class="crm-filters">' +
+      '<div class="crm-field" style="min-width:220px"><label>بحث</label><input id="fvSearch" placeholder="الرقم، العنوان، الشركة، أو Lead"></div>' +
+      '<div class="crm-field"><label>الحالة</label><select id="fvStatus"><option value="">الكل</option></select></div>' +
+      '<div class="crm-field"><label>الشركة / Lead</label><select id="fvCompanyLead"><option value="">الكل</option></select></div>' +
+      "</div></div>" +
+      '<div class="crm-table-wrap" id="crmTableWrap"><table class="crm-table"><thead><tr><th>الرقم</th><th>العنوان</th><th>الحالة</th><th>الإجمالي</th><th>صالح حتى</th><th>الإجراءات</th></tr></thead><tbody id="crmTableBody"></tbody></table></div>' +
+      '<div class="crm-pagination" id="crmPagination"></div>' +
+      '<div class="crm-card crm-empty" id="crmEmpty" style="display:none"><h2 style="color:#fbf7f0">لا توجد عروض أسعار بعد</h2><p>أنشئ أول عرض سعر لعميلك.</p></div>';
+
+    document.getElementById("fvStatus").innerHTML = '<option value="">الكل</option>' + Object.keys(STATUS_LABELS).map(function (s) { return '<option value="' + s + '">' + STATUS_LABELS[s] + "</option>"; }).join("");
+    document.getElementById("fvSearch").addEventListener("input", function (e) {
+      filters.q = e.target.value || "";
+      clearTimeout(searchDebounce);
+      searchDebounce = setTimeout(resetAndReload, 350);
+    });
+    document.getElementById("fvStatus").addEventListener("change", function (e) { filters.status = e.target.value; resetAndReload(); });
+    document.getElementById("fvCompanyLead").addEventListener("change", function (e) { filters.companyOrLead = e.target.value; resetAndReload(); });
+
+    document.getElementById("bAddItem").addEventListener("click", function () { addItemRow(); });
+    document.getElementById("bDiscount").addEventListener("input", recompute);
+    document.getElementById("bCurrency").addEventListener("input", recompute);
+    document.getElementById("bCancel").addEventListener("click", closeBuilder);
+    document.getElementById("bSave").addEventListener("click", saveProposal);
+    if (who.can_write) document.getElementById("crmAdd").addEventListener("click", function () { openBuilder(null); });
+
+    var leadsRes = await db.from("crm_leads").select("id,title,company_id,currency").order("created_at", { ascending: false }).limit(LOOKUP_CAP);
+    leads = leadsRes.data || [];
+    var companiesRes = await db.from("crm_companies").select("id,name").order("name").limit(LOOKUP_CAP);
+    companies = companiesRes.data || [];
+    document.getElementById("bLead").innerHTML = '<option value="">— بدون —</option>' + leads.map(function (l) { return '<option value="' + l.id + '">' + CRM.escape(l.title) + "</option>"; }).join("");
+    document.getElementById("bCompany").innerHTML = '<option value="">— بدون —</option>' + companies.map(function (c) { return '<option value="' + c.id + '">' + CRM.escape(c.name) + "</option>"; }).join("");
+    document.getElementById("fvCompanyLead").innerHTML = '<option value="">الكل</option>' +
+      (companies.length ? '<optgroup label="الشركات">' + companies.map(function (c) { return '<option value="' + c.id + '">' + CRM.escape(c.name) + "</option>"; }).join("") + "</optgroup>" : "") +
+      (leads.length ? '<optgroup label="العملاء المحتملون">' + leads.map(function (l) { return '<option value="' + l.id + '">' + CRM.escape(l.title) + "</option>"; }).join("") + "</optgroup>" : "");
+
+    var params = new URLSearchParams(window.location.search);
+    if (params.get("new") === "1" && who.can_write) openBuilder(params.get("lead_id"), params.get("company_id"));
+
+    await load();
+  }
+
+  boot();
+})();
+</script>
+</body>
+</html>

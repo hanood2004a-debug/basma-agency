@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>الحملات | Basma CRM</title>
+<link rel="icon" type="image/png" href="../assets/basma-logo-navbar.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/crm.css">
+</head>
+<body class="crm-body">
+
+<div class="crm-modal-overlay" id="crmCampaignModalOverlay">
+  <div class="crm-modal">
+    <h3 id="crmCampaignModalTitle">حملة جديدة</h3>
+    <form id="crmCampaignForm">
+      <input type="hidden" id="cRowId">
+      <div class="crm-form-grid">
+        <div class="crm-field"><label for="cName">اسم الحملة *</label><input id="cName" required></div>
+        <div class="crm-field"><label for="cChannel">القناة *</label>
+          <select id="cChannel" required>
+            <option value="email">بريد إلكتروني</option>
+            <option value="whatsapp">واتساب</option>
+            <option value="linkedin">LinkedIn</option>
+            <option value="phone">هاتف</option>
+          </select>
+        </div>
+        <div class="crm-field"><label for="cTemplate">القالب</label><select id="cTemplate"><option value="">— بدون قالب —</option></select></div>
+        <div class="crm-field"><label for="cStatus">الحالة</label>
+          <select id="cStatus">
+            <option value="draft">مسودة</option>
+            <option value="running">قيد التشغيل</option>
+            <option value="paused">مُتوقفة مؤقتًا</option>
+            <option value="completed">مكتملة</option>
+          </select>
+        </div>
+      </div>
+      <p class="crm-muted" style="font-size:12px;margin-top:8px">مقاييس الحملة (المستلمون، المُرسل، الردود، الفوز، إلخ) تُحسب مباشرة من سجل التواصل الموحّد ولا تُخزَّن هنا — لذلك لا يمكن أن تنحرف عن الواقع.</p>
+      <div class="crm-form-actions">
+        <button type="button" class="crm-btn" id="crmCampaignCancel">إلغاء</button>
+        <button type="submit" class="crm-btn crm-btn-primary" id="crmCampaignSave">حفظ</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="crm-modal-overlay" id="crmMembersModalOverlay">
+  <div class="crm-modal" style="max-width:760px;max-height:88vh;overflow:auto">
+    <h3>أعضاء الحملة: <span id="crmMembersCampaignName"></span></h3>
+
+    <div class="crm-section-title" style="margin-top:6px"><h2>الأعضاء الحاليون (<span id="crmMembersCount">0</span>)</h2></div>
+    <div id="crmMembersList" style="display:flex;flex-direction:column;gap:6px;max-height:220px;overflow:auto;margin-bottom:16px"></div>
+
+    <div class="crm-section-title"><h2>إضافة شركات</h2></div>
+    <div class="crm-field"><label>بحث بالاسم</label><input id="mSearch" placeholder="اكتب اسم الشركة…"></div>
+    <div id="mCandidateList" style="display:flex;flex-direction:column;gap:4px;max-height:220px;overflow:auto;margin:10px 0"></div>
+
+    <div class="crm-form-actions">
+      <button type="button" class="crm-btn" id="crmMembersClose">إغلاق</button>
+      <button type="button" class="crm-btn crm-btn-primary" id="mAddSelected">إضافة المحددة</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="assets/crm-client.js"></script>
+<script>
+(function () {
+  "use strict";
+  var CRM = window.Basma.CRM;
+
+  var CHANNEL_LABELS = { email: "بريد إلكتروني", whatsapp: "واتساب", linkedin: "LinkedIn", phone: "هاتف" };
+  var CHANNEL_BADGE = { email: "gold", whatsapp: "success", linkedin: "gold", phone: "warning" };
+  var STATUS_LABELS = { draft: "مسودة", running: "قيد التشغيل", paused: "مُتوقفة مؤقتًا", completed: "مكتملة" };
+  var STATUS_BADGE = { draft: "mute", running: "success", paused: "warning", completed: "gold" };
+
+  var db, who, rows = [], templates = [], metricsCache = {};
+  var searchDebounce = null;
+
+  function renderBlocked() {
+    document.getElementById("crmApp").innerHTML =
+      '<div class="crm-card crm-empty">' +
+      '<h2 style="color:#fbf7f0">الحملات غير مُفعّلة بعد</h2>' +
+      '<p>جدول <code>crm_campaigns</code> غير موجود بعد. شغّل ملف <code>CRM-OUTREACH-AUTOMATION.sql</code> في محرر SQL في Supabase أولًا، ثم أعد تحميل هذه الصفحة.</p>' +
+      "</div>";
+  }
+  function isMigrationMissingError(err) {
+    var msg = (err && err.message) || "";
+    return /crm_campaign/i.test(msg) && (/does not exist/i.test(msg) || /schema cache/i.test(msg) || (err && err.code === "42P01") || (err && err.code === "PGRST202"));
+  }
+
+  // ---------- Create / edit campaign ----------
+  async function populateTemplateOptions(channel) {
+    var sel = document.getElementById("cTemplate");
+    var list = templates.filter(function (t) { return t.type === channel; });
+    sel.innerHTML = '<option value="">— بدون قالب —</option>' + list.map(function (t) { return '<option value="' + t.id + '">' + CRM.escape(t.name) + "</option>"; }).join("");
+  }
+
+  function openCampaignModal(row) {
+    document.getElementById("crmCampaignModalTitle").textContent = row ? "تعديل الحملة" : "حملة جديدة";
+    document.getElementById("cRowId").value = row ? row.id : "";
+    document.getElementById("cName").value = row ? row.name : "";
+    document.getElementById("cChannel").value = (row && row.channel) || "email";
+    populateTemplateOptions(document.getElementById("cChannel").value).then(function () {
+      document.getElementById("cTemplate").value = (row && row.template_id) || "";
+    });
+    document.getElementById("cStatus").value = (row && row.status) || "draft";
+    document.getElementById("crmCampaignModalOverlay").classList.add("is-open");
+  }
+  function closeCampaignModal() { document.getElementById("crmCampaignModalOverlay").classList.remove("is-open"); }
+
+  async function saveCampaign(event) {
+    event.preventDefault();
+    var id = document.getElementById("cRowId").value;
+    var payload = {
+      name: document.getElementById("cName").value.trim(),
+      channel: document.getElementById("cChannel").value,
+      template_id: document.getElementById("cTemplate").value || null,
+      status: document.getElementById("cStatus").value
+    };
+    if (!payload.name) { CRM.toast("اسم الحملة مطلوب.", "danger"); return; }
+    var btn = document.getElementById("crmCampaignSave"); btn.disabled = true;
+    try {
+      var res = id ? await db.from("crm_campaigns").update(payload).eq("id", id) : await db.from("crm_campaigns").insert(payload);
+      if (res.error) throw res.error;
+      CRM.toast(id ? "تم تحديث الحملة." : "تم إنشاء الحملة.", "info");
+      closeCampaignModal();
+      await load();
+    } catch (err) { CRM.toast("تعذّر الحفظ: " + (err.message || ""), "danger"); }
+    finally { btn.disabled = false; }
+  }
+
+  async function removeCampaign(id) {
+    if (!CRM.confirm("حذف هذه الحملة نهائيًا؟ (لن يتم حذف رسائل التواصل المرتبطة بها، فقط ربطها بالحملة)")) return;
+    try {
+      var res = await db.from("crm_campaigns").delete().eq("id", id);
+      if (res.error) throw res.error;
+      CRM.toast("تم الحذف.", "info");
+      await load();
+    } catch (err) { CRM.toast("تعذّر الحذف: " + (err.message || ""), "danger"); }
+  }
+
+  // ---------- Metrics (always computed live via crm_campaign_metrics) ----------
+  async function fetchMetrics(campaignId) {
+    try {
+      var res = await db.rpc("crm_campaign_metrics", { p_campaign_id: campaignId });
+      if (res.error) throw res.error;
+      return res.data || {};
+    } catch (e) { return null; }
+  }
+
+  function metricChip(label, val) {
+    return '<span class="crm-badge crm-badge-mute" style="margin-inline-end:4px">' + CRM.escape(label) + ": " + (val == null ? "—" : val) + "</span>";
+  }
+
+  function renderMetrics(m) {
+    if (!m) return '<span class="crm-muted" style="font-size:12px">تعذّر حساب المقاييس</span>';
+    return metricChip("المستلمون", m.recipients) + metricChip("مُرسل", m.sent) + metricChip("فاشل", m.failed) +
+      metricChip("بانتظار الرد", m.waiting_reply) + metricChip("تم الرد", m.replied) + metricChip("مهتم", m.interested) +
+      metricChip("اجتماعات", m.meetings) + metricChip("عروض", m.proposals) + metricChip("فوز", m.won);
+  }
+
+  // ---------- List ----------
+  function render() {
+    var wrap = document.getElementById("crmTableWrap"), empty = document.getElementById("crmEmpty");
+    if (!rows.length) { wrap.style.display = "none"; empty.style.display = "block"; return; }
+    wrap.style.display = "block"; empty.style.display = "none";
+    document.getElementById("crmTableBody").innerHTML = rows.map(function (r) {
+      var tpl = templates.filter(function (t) { return t.id === r.template_id; })[0];
+      return "<tr>" +
+        "<td><strong>" + CRM.escape(r.name) + "</strong></td>" +
+        "<td><span class=\"crm-badge crm-badge-" + (CHANNEL_BADGE[r.channel] || "mute") + "\">" + (CHANNEL_LABELS[r.channel] || r.channel) + "</span></td>" +
+        "<td>" + (tpl ? CRM.escape(tpl.name) : "—") + "</td>" +
+        "<td><span class=\"crm-badge crm-badge-" + (STATUS_BADGE[r.status] || "mute") + "\">" + (STATUS_LABELS[r.status] || r.status) + "</span></td>" +
+        "<td class=\"crm-muted\" style=\"font-size:12px\">" + CRM.formatDate(r.created_at) + "</td>" +
+        "<td id=\"cmMetrics-" + r.id + "\"><span class=\"crm-muted\" style=\"font-size:12px\">جارٍ الحساب…</span></td>" +
+        "<td style=\"white-space:nowrap;display:flex;gap:6px\">" +
+        "<button class=\"crm-btn crm-btn-sm crm-members\" data-id=\"" + r.id + "\">الأعضاء</button>" +
+        (who.can_write ? "<button class=\"crm-btn crm-btn-sm crm-edit\" data-id=\"" + r.id + "\">تعديل</button>" : "") +
+        (who.is_admin ? "<button class=\"crm-btn crm-btn-sm crm-btn-danger crm-del\" data-id=\"" + r.id + "\">حذف</button>" : "") +
+        "</td></tr>";
+    }).join("");
+    document.querySelectorAll(".crm-edit").forEach(function (b) { b.addEventListener("click", function () { openCampaignModal(rows.filter(function (r) { return r.id === b.dataset.id; })[0]); }); });
+    document.querySelectorAll(".crm-del").forEach(function (b) { b.addEventListener("click", function () { removeCampaign(b.dataset.id); }); });
+    document.querySelectorAll(".crm-members").forEach(function (b) { b.addEventListener("click", function () { openMembersModal(rows.filter(function (r) { return r.id === b.dataset.id; })[0]); }); });
+
+    // Metrics are fetched after the table paints (one RPC per visible
+    // campaign — fine at expected campaign-list sizes; never denormalized).
+    rows.forEach(function (r) {
+      fetchMetrics(r.id).then(function (m) {
+        metricsCache[r.id] = m;
+        var cell = document.getElementById("cmMetrics-" + r.id);
+        if (cell) cell.innerHTML = renderMetrics(m);
+      });
+    });
+  }
+
+  async function load() {
+    try {
+      var res = await db.from("crm_campaigns").select("*").order("created_at", { ascending: false });
+      if (res.error) throw res.error;
+      rows = res.data || [];
+      render();
+    } catch (err) {
+      if (isMigrationMissingError(err)) { renderBlocked(); return; }
+      CRM.toast("تعذّر التحميل: " + (err.message || ""), "danger");
+    }
+  }
+
+  // ---------- Members modal ----------
+  var currentCampaign = null, currentMembers = [], mSelected = {};
+
+  async function openMembersModal(campaign) {
+    currentCampaign = campaign;
+    mSelected = {};
+    document.getElementById("crmMembersCampaignName").textContent = campaign.name;
+    document.getElementById("mSearch").value = "";
+    document.getElementById("mCandidateList").innerHTML = "";
+    await loadMembers();
+    document.getElementById("crmMembersModalOverlay").classList.add("is-open");
+  }
+  function closeMembersModal() { document.getElementById("crmMembersModalOverlay").classList.remove("is-open"); currentCampaign = null; }
+
+  async function loadMembers() {
+    try {
+      var res = await db.from("crm_campaign_members").select("id,company_id,contact_id,crm_companies(name),crm_contacts(full_name)").eq("campaign_id", currentCampaign.id).order("added_at", { ascending: false });
+      if (res.error) throw res.error;
+      currentMembers = res.data || [];
+    } catch (e) { currentMembers = []; }
+    document.getElementById("crmMembersCount").textContent = currentMembers.length;
+    document.getElementById("crmMembersList").innerHTML = currentMembers.length
+      ? currentMembers.map(function (m) {
+          var companyName = (m.crm_companies && m.crm_companies.name) || "—";
+          var contactName = m.crm_contacts && m.crm_contacts.full_name;
+          return '<div class="crm-flex-between" style="font-size:13px;border-bottom:1px solid rgba(255,255,255,.06);padding-bottom:4px">' +
+            "<span>" + CRM.escape(companyName) + (contactName ? " — <span class=\"crm-muted\">" + CRM.escape(contactName) + "</span>" : "") + "</span>" +
+            '<button type="button" class="crm-btn crm-btn-sm crm-btn-danger" data-remove="' + m.id + '">إزالة</button>' +
+            "</div>";
+        }).join("")
+      : '<p class="crm-muted" style="font-size:13px">لا يوجد أعضاء بعد.</p>';
+    document.querySelectorAll("[data-remove]").forEach(function (b) {
+      b.addEventListener("click", async function () {
+        try {
+          var res2 = await db.from("crm_campaign_members").delete().eq("id", b.dataset.remove);
+          if (res2.error) throw res2.error;
+          await loadMembers();
+        } catch (err) { CRM.toast("تعذّر الإزالة: " + (err.message || ""), "danger"); }
+      });
+    });
+  }
+
+  async function searchCandidates() {
+    var q = document.getElementById("mSearch").value.trim();
+    var existingIds = currentMembers.map(function (m) { return m.company_id; });
+    try {
+      var query = db.from("crm_companies").select("id,name").order("name", { ascending: true }).limit(30);
+      if (q) query = query.ilike("name", "%" + q + "%");
+      var res = await query;
+      if (res.error) throw res.error;
+      var list = (res.data || []).filter(function (c) { return existingIds.indexOf(c.id) === -1; });
+      document.getElementById("mCandidateList").innerHTML = list.length
+        ? list.map(function (c) {
+            return '<label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">' +
+              '<input type="checkbox" class="mCand" data-id="' + c.id + '" style="width:auto;min-height:auto"' + (mSelected[c.id] ? " checked" : "") + "> " + CRM.escape(c.name) + "</label>";
+          }).join("")
+        : '<p class="crm-muted" style="font-size:12.5px">لا توجد نتائج (أو أن جميع النتائج مضافة بالفعل).</p>';
+      document.querySelectorAll(".mCand").forEach(function (cb) {
+        cb.addEventListener("change", function () {
+          if (cb.checked) mSelected[cb.dataset.id] = true; else delete mSelected[cb.dataset.id];
+        });
+      });
+    } catch (e) { document.getElementById("mCandidateList").innerHTML = '<p class="crm-muted" style="font-size:12.5px">تعذّر البحث.</p>'; }
+  }
+
+  async function addSelectedMembers() {
+    var ids = Object.keys(mSelected);
+    if (!ids.length) { CRM.toast("حدد شركة واحدة على الأقل.", "warning"); return; }
+    var btn = document.getElementById("mAddSelected"); btn.disabled = true;
+    try {
+      // Best-effort: resolve each company's primary contact so the campaign
+      // member carries a useful default contact_id (nullable — sending
+      // still resolves the live primary contact at send time regardless).
+      var contactsRes = await db.from("crm_contacts").select("id,company_id,is_primary").in("company_id", ids);
+      var contactsByCompany = {};
+      (contactsRes.data || []).forEach(function (c) {
+        if (!contactsByCompany[c.company_id] || c.is_primary) contactsByCompany[c.company_id] = c;
+      });
+      var payload = ids.map(function (id) {
+        var c = contactsByCompany[id];
+        return { campaign_id: currentCampaign.id, company_id: id, contact_id: c ? c.id : null };
+      });
+      var res = await db.from("crm_campaign_members").insert(payload);
+      if (res.error) throw res.error;
+      CRM.toast("تمت إضافة " + ids.length + " شركة إلى الحملة.", "info");
+      mSelected = {};
+      document.getElementById("mSearch").value = "";
+      document.getElementById("mCandidateList").innerHTML = "";
+      await loadMembers();
+    } catch (err) { CRM.toast("تعذّر الإضافة: " + (err.message || ""), "danger"); }
+    finally { btn.disabled = false; }
+  }
+
+  async function boot() {
+    var ctx = await CRM.boot({ activeKey: "outreach-campaigns", title: "الحملات", sub: "حملات تواصل خفيفة الوزن فوق مركز التواصل الموحّد" });
+    if (!ctx) return;
+    db = ctx.client; who = ctx.who;
+    document.getElementById("crmTopbarActions").innerHTML =
+      '<a class="crm-btn" href="outreach.html">مركز التواصل</a> <a class="crm-btn" href="outreach-dashboard.html">لوحة التواصل</a>' +
+      (who.can_write ? ' <button class="crm-btn crm-btn-primary" id="crmAddCampaign">+ حملة جديدة</button>' : "");
+
+    document.getElementById("crmApp").innerHTML =
+      '<div class="crm-table-wrap" id="crmTableWrap"><table class="crm-table"><thead><tr>' +
+      "<th>الاسم</th><th>القناة</th><th>القالب</th><th>الحالة</th><th>أُنشئت</th><th>المقاييس</th><th>الإجراءات</th>" +
+      "</tr></thead><tbody id=\"crmTableBody\"></tbody></table></div>" +
+      '<div class="crm-card crm-empty" id="crmEmpty" style="display:none"><h2 style="color:#fbf7f0">لا توجد حملات بعد</h2><p>أنشئ أول حملة لتنظيم التواصل الجماعي حسب القناة والقالب.</p></div>';
+
+    if (who.can_write) document.getElementById("crmAddCampaign").addEventListener("click", function () { openCampaignModal(null); });
+    document.getElementById("crmCampaignCancel").addEventListener("click", closeCampaignModal);
+    document.getElementById("crmCampaignForm").addEventListener("submit", saveCampaign);
+    document.getElementById("cChannel").addEventListener("change", function () { populateTemplateOptions(this.value); });
+    document.getElementById("crmMembersClose").addEventListener("click", closeMembersModal);
+    document.getElementById("mAddSelected").addEventListener("click", addSelectedMembers);
+    document.getElementById("mSearch").addEventListener("input", function () { clearTimeout(searchDebounce); searchDebounce = setTimeout(searchCandidates, 300); });
+
+    try {
+      var tplRes = await db.from("crm_outreach_templates").select("id,name,type");
+      templates = tplRes.data || [];
+    } catch (e) { templates = []; }
+
+    await load();
+  }
+
+  boot();
+})();
+</script>
+</body>
+</html>

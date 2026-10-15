@@ -1,0 +1,828 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>استيراد الشركات | Basma CRM</title>
+<link rel="icon" type="image/png" href="../assets/basma-logo-navbar.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/crm.css">
+</head>
+<body class="crm-body">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="assets/crm-client.js"></script>
+<script>
+// ============================================================================
+// ROADMAP / ARCHITECTURE NOTES — Import History (NOT implemented)
+// ============================================================================
+// Explicitly deferred per the CRM-v1.3.1 request: documented here for the
+// next round, no schema change and no code below implements any of this.
+//
+// Feature: a persistent log of every completed (or blocked) import run, so
+// "who imported what, when, and with what result" survives a page reload —
+// today's "Open Imported Companies" button only lives for the current
+// browser tab's sessionStorage, which is a deliberate, disclosed limit.
+//
+// Proposed table (new, additive — would need its own migration, not folded
+// into this file silently): public.crm_import_batches
+//   id               uuid primary key default gen_random_uuid()
+//   file_name        text not null            -- "File Name"
+//   created_by       uuid references auth.users(id)   -- "User"
+//   created_at       timestamptz not null default now() -- "Import Date"
+//   total_rows       integer not null          -- "Total Rows"
+//   companies_created integer not null default 0
+//   companies_updated integer not null default 0
+//   contacts_created integer not null default 0
+//   leads_created    integer not null default 0 -- together: "Imported"/"Updated"
+//   skipped          integer not null default 0 -- "Skipped"
+//   failed           integer not null default 0 -- "Failed"
+//   duration_ms      integer                   -- "Duration"
+//   dry_run          boolean not null default false
+//
+// Integration sketch: crm_import_batch() (Section 8 of
+// CRM-SALES-OPS-UPGRADE.sql) already returns per-batch counts; a future
+// version would accept an additional p_import_batch_id and increment one
+// crm_import_batches row per call inside the SAME transaction (still
+// atomic, no new failure mode) instead of the client aggregating totals in
+// memory as it does now. RLS would mirror crm_notifications: crm_can_read()
+// for select, crm_can_write() for insert, admin-only delete. A new
+// "سجل الاستيراد" nav entry would list rows from this table with the exact
+// columns requested above. Until this exists, the results screen's
+// in-memory summary is the only record of an import — refreshing the page
+// after an import loses it, which is the main gap this would close.
+// ============================================================================
+
+(function () {
+  "use strict";
+  var CRM = window.Basma.CRM;
+  var db, who;
+
+  // ==========================================================================
+  // Pure logic — CSV parsing, header mapping, normalization, validation,
+  // dedupe keys. Deliberately touches no DOM/window state so it can be
+  // unit-tested standalone in Node (see CRM-v1.3 report for the test run).
+  // ==========================================================================
+
+  var MAX_FILE_BYTES = 20 * 1024 * 1024; // 20 MB
+  var BATCH_SIZE = 100;
+  var EXISTING_COMPANY_FETCH_CAP = 5000; // disclosed limitation — see report
+
+  var ALLOWED_STAGES = ["new", "contacted", "qualified", "meeting_scheduled", "proposal_sent", "negotiation", "won", "lost"];
+  var ALLOWED_PRIORITIES = ["low", "medium", "high", "urgent"];
+  var STAGE_LABELS = { new: "جديد", contacted: "تم التواصل", qualified: "مؤهل", meeting_scheduled: "اجتماع مجدول", proposal_sent: "أرسل العرض", negotiation: "تفاوض", won: "فاز", lost: "خسر" };
+  var PRIORITY_LABELS = { low: "منخفضة", medium: "متوسطة", high: "عالية", urgent: "عاجلة" };
+
+  // Canonical header map: lowercase, whitespace-collapsed CSV header text ->
+  // { group, field, required }. Case-insensitive matching happens by
+  // normalizing the incoming header the same way before lookup.
+  var HEADER_MAP = {
+    "company name": { group: "company", field: "name", required: true },
+    "industry": { group: "company", field: "industry" },
+    "country": { group: "company", field: "country" },
+    "city": { group: "company", field: "city" },
+    "website": { group: "company", field: "website" },
+    "linkedin": { group: "company", field: "linkedin_url" },
+    "email": { group: "company", field: "email" },
+    "phone": { group: "company", field: "phone" },
+    "primary contact name": { group: "contact", field: "full_name" },
+    "primary contact email": { group: "contact", field: "email" },
+    "primary contact phone": { group: "contact", field: "phone" },
+    "primary contact position": { group: "contact", field: "job_title" },
+    "lead title": { group: "lead", field: "title" },
+    "lead source": { group: "lead", field: "source" },
+    "lead stage": { group: "lead", field: "stage" },
+    "lead priority": { group: "lead", field: "priority" },
+    "lead value": { group: "lead", field: "estimated_value" },
+    "lead notes": { group: "lead", field: "notes" }
+  };
+
+  function normalizeHeaderText(h) {
+    return String(h == null ? "" : h).replace(/^﻿/, "").trim().toLowerCase().replace(/\s+/g, " ");
+  }
+
+  // RFC4180-ish CSV parser. Handles quoted fields (with embedded commas,
+  // newlines, and "" as an escaped quote), CRLF/CR/LF line endings, and a
+  // leading UTF-8 BOM. No external dependency — matches this project's
+  // established zero-npm-dependency convention for anything shipped to the
+  // browser.
+  function parseCSV(text) {
+    var rows = [];
+    var row = [];
+    var field = "";
+    var inQuotes = false;
+    var i = 0;
+    var len = text.length;
+    if (text.charCodeAt(0) === 0xFEFF) { text = text.slice(1); len = text.length; }
+
+    function pushField() { row.push(field); field = ""; }
+    function pushRow() { pushField(); rows.push(row); row = []; }
+
+    while (i < len) {
+      var ch = text[i];
+      if (inQuotes) {
+        if (ch === '"') {
+          if (text[i + 1] === '"') { field += '"'; i += 2; continue; }
+          inQuotes = false; i += 1; continue;
+        }
+        field += ch; i += 1; continue;
+      } else {
+        if (ch === '"') { inQuotes = true; i += 1; continue; }
+        if (ch === ",") { pushField(); i += 1; continue; }
+        if (ch === "\r") {
+          if (text[i + 1] === "\n") i += 1;
+          pushRow(); i += 1; continue;
+        }
+        if (ch === "\n") { pushRow(); i += 1; continue; }
+        field += ch; i += 1; continue;
+      }
+    }
+    // Final field/row (file may or may not end with a newline).
+    if (field.length || row.length) pushRow();
+
+    // Drop fully-empty trailing rows (common with a trailing blank line).
+    while (rows.length && rows[rows.length - 1].length === 1 && rows[rows.length - 1][0] === "") rows.pop();
+    return rows;
+  }
+
+  function mapHeaders(rawHeaderRow) {
+    var mapped = [];
+    var unknown = [];
+    rawHeaderRow.forEach(function (raw, index) {
+      var norm = normalizeHeaderText(raw);
+      var def = HEADER_MAP[norm];
+      if (def) mapped.push({ index: index, group: def.group, field: def.field, required: !!def.required, raw: raw });
+      else if (norm) unknown.push(raw);
+    });
+    return { mapped: mapped, unknown: unknown };
+  }
+
+  function normalizeText(v) {
+    if (v == null) return null;
+    var t = String(v).trim();
+    return t.length ? t : null;
+  }
+
+  function normalizeEmail(v) {
+    var t = normalizeText(v);
+    return t ? t.toLowerCase() : null;
+  }
+
+  function isValidEmail(v) {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+  }
+
+  function normalizePhone(v) {
+    var t = normalizeText(v);
+    if (!t) return null;
+    var kept = t.replace(/[^\d+]/g, "");
+    // Keep at most one leading '+'.
+    kept = kept.replace(/(?!^)\+/g, "");
+    return kept || null;
+  }
+
+  function normalizeWebsite(v) {
+    var t = normalizeText(v);
+    if (!t) return null;
+    if (!/^https?:\/\//i.test(t)) t = "https://" + t;
+    return t.toLowerCase();
+  }
+
+  function dedupeKeyName(v) {
+    var t = normalizeText(v);
+    return t ? t.toLowerCase().replace(/\s+/g, " ") : null;
+  }
+  function dedupeKeyWebsite(v) {
+    var t = normalizeWebsite(v);
+    if (!t) return null;
+    return t.replace(/^https?:\/\//i, "").replace(/^www\./i, "").replace(/\/+$/, "");
+  }
+  function dedupeKeyEmail(v) {
+    return normalizeEmail(v);
+  }
+  function dedupeKeyLinkedin(v) {
+    var t = normalizeText(v);
+    if (!t) return null;
+    return t.toLowerCase().replace(/\/+$/, "");
+  }
+
+  // Turns one parsed CSV data row (array of cell strings) into a structured
+  // { company, contact, lead } object using the header map from mapHeaders().
+  function buildRowObject(headerMapResult, cells) {
+    var out = { company: {}, contact: {}, lead: {} };
+    headerMapResult.mapped.forEach(function (h) {
+      var raw = cells[h.index];
+      out[h.group][h.field] = raw == null ? "" : raw;
+    });
+    return out;
+  }
+
+  // Validates + normalizes one row object in place. Returns
+  // { valid, reasons: [string], corrections: [string] }. "reasons" are hard
+  // failures (row will never be imported). "corrections" are soft fixes
+  // (e.g. an unrecognized stage silently defaulted) reported to the user
+  // but not treated as failures.
+  function validateAndNormalizeRow(row) {
+    var reasons = [];
+    var corrections = [];
+
+    row.company.name = normalizeText(row.company.name);
+    if (!row.company.name) reasons.push("اسم الشركة مفقود");
+
+    row.company.industry = normalizeText(row.company.industry);
+    row.company.country = normalizeText(row.company.country);
+    row.company.city = normalizeText(row.company.city);
+    row.company.website = normalizeWebsite(row.company.website);
+    row.company.linkedin_url = normalizeText(row.company.linkedin_url);
+    row.company.phone = normalizePhone(row.company.phone);
+
+    var companyEmailRaw = normalizeEmail(row.company.email);
+    if (companyEmailRaw && !isValidEmail(companyEmailRaw)) { reasons.push("بريد الشركة غير صالح"); row.company.email = null; }
+    else row.company.email = companyEmailRaw;
+
+    row.contact.full_name = normalizeText(row.contact.full_name);
+    row.contact.job_title = normalizeText(row.contact.job_title);
+    row.contact.phone = normalizePhone(row.contact.phone);
+    var contactEmailRaw = normalizeEmail(row.contact.email);
+    if (contactEmailRaw && !isValidEmail(contactEmailRaw)) { reasons.push("بريد جهة الاتصال غير صالح"); row.contact.email = null; }
+    else row.contact.email = contactEmailRaw;
+
+    row.lead.title = normalizeText(row.lead.title);
+    row.lead.source = normalizeText(row.lead.source);
+    row.lead.notes = normalizeText(row.lead.notes);
+
+    var stage = normalizeText(row.lead.stage);
+    if (stage) {
+      var stageKey = stage.toLowerCase().replace(/\s+/g, "_");
+      if (ALLOWED_STAGES.indexOf(stageKey) !== -1) row.lead.stage = stageKey;
+      else { corrections.push("مرحلة غير معروفة ‘" + stage + "’ → تم استخدام ‘جديد’"); row.lead.stage = "new"; }
+    } else row.lead.stage = "new";
+
+    var priority = normalizeText(row.lead.priority);
+    if (priority) {
+      var priorityKey = priority.toLowerCase();
+      if (ALLOWED_PRIORITIES.indexOf(priorityKey) !== -1) row.lead.priority = priorityKey;
+      else { corrections.push("أولوية غير معروفة ‘" + priority + "’ → تم استخدام ‘متوسطة’"); row.lead.priority = "medium"; }
+    } else row.lead.priority = "medium";
+
+    var rawValue = normalizeText(row.lead.estimated_value);
+    var parsedValue = rawValue ? Number(String(rawValue).replace(/[^\d.\-]/g, "")) : 0;
+    if (!isFinite(parsedValue) || isNaN(parsedValue) || parsedValue < 0) {
+      if (rawValue) corrections.push("قيمة Lead غير صالحة ‘" + rawValue + "’ → تم استخدام 0");
+      parsedValue = 0;
+    }
+    row.lead.estimated_value = parsedValue;
+
+    return { valid: reasons.length === 0, reasons: reasons, corrections: corrections };
+  }
+
+  // Scans the full parsed+validated row set and flags duplicates that occur
+  // MORE THAN ONCE within the file itself (independent of anything already
+  // in the database). First occurrence of a key is never flagged; every
+  // later occurrence is.
+  function findWithinFileDuplicates(rows) {
+    var seen = { name: {}, website: {}, email: {}, linkedin: {} };
+    rows.forEach(function (r) {
+      if (!r.valid) return;
+      var keys = {
+        name: dedupeKeyName(r.company.name),
+        website: dedupeKeyWebsite(r.company.website),
+        email: dedupeKeyEmail(r.company.email),
+        linkedin: dedupeKeyLinkedin(r.company.linkedin_url)
+      };
+      var matchedField = null;
+      Object.keys(keys).forEach(function (field) {
+        var k = keys[field];
+        if (!k || matchedField) return;
+        if (seen[field][k] !== undefined) matchedField = field;
+      });
+      if (matchedField) {
+        r.duplicateInFile = true;
+        r.duplicateMatchField = matchedField;
+      } else {
+        Object.keys(keys).forEach(function (field) {
+          var k = keys[field];
+          if (k && seen[field][k] === undefined) seen[field][k] = r.lineNumber;
+        });
+      }
+    });
+    return rows;
+  }
+
+  // Matches a row against a pre-fetched index of existing companies. Index
+  // shape: { byName, byWebsite, byEmail, byLinkedin } each a plain object
+  // mapping a dedupe key -> { id, name }.
+  function matchAgainstExisting(row, index) {
+    var checks = [
+      ["website", dedupeKeyWebsite(row.company.website), index.byWebsite],
+      ["email", dedupeKeyEmail(row.company.email), index.byEmail],
+      ["linkedin", dedupeKeyLinkedin(row.company.linkedin_url), index.byLinkedin],
+      ["name", dedupeKeyName(row.company.name), index.byName]
+    ];
+    for (var i = 0; i < checks.length; i++) {
+      var field = checks[i][0], key = checks[i][1], map = checks[i][2];
+      if (key && map[key]) return { field: field, id: map[key].id, name: map[key].name };
+    }
+    return null;
+  }
+
+  function buildExistingIndex(companies) {
+    var index = { byName: {}, byWebsite: {}, byEmail: {}, byLinkedin: {} };
+    companies.forEach(function (c) {
+      var nk = dedupeKeyName(c.name); if (nk && !index.byName[nk]) index.byName[nk] = { id: c.id, name: c.name };
+      var wk = dedupeKeyWebsite(c.website); if (wk && !index.byWebsite[wk]) index.byWebsite[wk] = { id: c.id, name: c.name };
+      var ek = dedupeKeyEmail(c.email); if (ek && !index.byEmail[ek]) index.byEmail[ek] = { id: c.id, name: c.name };
+      var lk = dedupeKeyLinkedin(c.linkedin_url); if (lk && !index.byLinkedin[lk]) index.byLinkedin[lk] = { id: c.id, name: c.name };
+    });
+    return index;
+  }
+
+  // ==========================================================================
+  // Page state + UI
+  // ==========================================================================
+
+  var state = {
+    stage: "upload", // upload | preview | importing | results | blocked
+    file: null,
+    rows: [],           // classified row objects
+    unknownColumns: [],
+    existingIndex: null,
+    cancelled: false,
+    results: null,
+    importedCompanyIds: null, // Set, populated during a real (non-dry-run) import
+    migrationMissing: false
+  };
+
+  var IMPORT_SESSION_STORAGE_KEY = "crmLastImportCompanyIds";
+  var IMPORT_SESSION_ID_CAP = 500; // see report — "Open Imported Companies" is a review convenience, not a full audit trail
+
+  function q(id) { return document.getElementById(id); }
+
+  function resetToUpload() {
+    state.stage = "upload"; state.file = null; state.rows = []; state.unknownColumns = [];
+    state.existingIndex = null; state.cancelled = false; state.results = null;
+    state.importedCompanyIds = null; state.migrationMissing = false;
+    render();
+  }
+
+  function humanFileSize(bytes) {
+    if (bytes < 1024) return bytes + " بايت";
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " كيلوبايت";
+    return (bytes / (1024 * 1024)).toFixed(2) + " ميغابايت";
+  }
+
+  async function handleFile(file) {
+    if (!file) return;
+    if (!/\.csv$/i.test(file.name) && file.type !== "text/csv") {
+      CRM.toast("الرجاء اختيار ملف CSV فقط.", "danger"); return;
+    }
+    if (file.size > MAX_FILE_BYTES) {
+      CRM.toast("حجم الملف يتجاوز الحد الأقصى (20 ميغابايت).", "danger"); return;
+    }
+    state.file = file;
+    render(); // show filename immediately while parsing
+
+    var text;
+    try { text = await file.text(); }
+    catch (err) { CRM.toast("تعذّر قراءة الملف: " + (err.message || ""), "danger"); return; }
+
+    var table = parseCSV(text);
+    if (!table.length) { CRM.toast("الملف فارغ.", "danger"); return; }
+
+    var headerResult = mapHeaders(table[0]);
+    if (!headerResult.mapped.some(function (h) { return h.field === "name" && h.group === "company"; })) {
+      CRM.toast("لم يتم العثور على عمود ‘Company Name’ في الملف.", "danger"); return;
+    }
+    state.unknownColumns = headerResult.unknown;
+
+    var dataRows = table.slice(1);
+    var rows = dataRows.map(function (cells, i) {
+      var obj = buildRowObject(headerResult, cells);
+      obj.lineNumber = i + 2; // header is line 1
+      var check = validateAndNormalizeRow(obj);
+      obj.valid = check.valid;
+      obj.reasons = check.reasons;
+      obj.corrections = check.corrections;
+      obj.duplicateInFile = false;
+      obj.existingMatch = null;
+      return obj;
+    });
+
+    findWithinFileDuplicates(rows);
+
+    // Pre-fetch existing companies once to check for DB-side duplicates.
+    // Capped — see EXISTING_COMPANY_FETCH_CAP and the final report's
+    // disclosed limitations.
+    try {
+      var existingRes = await db.from("crm_companies").select("id,name,website,email,linkedin_url").limit(EXISTING_COMPANY_FETCH_CAP);
+      if (existingRes.error) throw existingRes.error;
+      state.existingIndex = buildExistingIndex(existingRes.data || []);
+    } catch (err) {
+      CRM.toast("تعذّر جلب الشركات الحالية للمقارنة: " + (err.message || ""), "danger");
+      state.existingIndex = buildExistingIndex([]);
+    }
+
+    rows.forEach(function (r) {
+      if (!r.valid) return;
+      var m = matchAgainstExisting(r, state.existingIndex);
+      if (m) r.existingMatch = m;
+    });
+
+    state.rows = rows;
+    state.stage = "preview";
+    render();
+  }
+
+  function previewCounts() {
+    var rows = state.rows;
+    var total = rows.length;
+    var invalid = rows.filter(function (r) { return !r.valid; });
+    var valid = total - invalid.length;
+    var missingRequired = rows.filter(function (r) { return r.reasons.indexOf("اسم الشركة مفقود") !== -1; }).length;
+    var dupInFile = rows.filter(function (r) { return r.valid && r.duplicateInFile; }).length;
+    var dupExisting = rows.filter(function (r) { return r.valid && !r.duplicateInFile && r.existingMatch; }).length;
+    return { total: total, valid: valid, invalid: invalid.length, missingRequired: missingRequired, dupInFile: dupInFile, dupExisting: dupExisting, dupTotal: dupInFile + dupExisting };
+  }
+
+  function renderUpload() {
+    var app = q("crmApp");
+    app.innerHTML =
+      '<div class="crm-card">' +
+      '<div class="crm-section-title"><h2>استيراد الشركات من CSV</h2></div>' +
+      '<div class="crm-alert crm-alert-info">يدعم استيراد الشركات (وبشكل اختياري جهة اتصال أساسية وLead لكل صف). كل سجل يُنشأ تمامًا كما لو أُدخل يدويًا — نفس الجداول، نفس صلاحيات RLS، ونفس المشغّلات التلقائية (المهام والإشعارات).</div>' +
+      '<div id="crmDropzone" class="crm-dropzone" tabindex="0">' +
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" style="width:34px;height:34px;color:var(--crm-gold)"><path d="M12 16V4m0 0L7 9m5-5l5 5"/><path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg>' +
+      "<p>اسحب ملف CSV وأفلته هنا، أو</p>" +
+      '<label class="crm-btn crm-btn-primary" style="cursor:pointer">اختيار ملف<input type="file" id="crmFileInput" accept=".csv,text/csv" style="display:none"></label>' +
+      '<p class="crm-muted" style="font-size:11.5px;margin-top:8px">الحد الأقصى 20 ميغابايت.</p>' +
+      (state.file ? '<div class="crm-badge crm-badge-gold" style="margin-top:10px">' + CRM.escape(state.file.name) + " — " + humanFileSize(state.file.size) + "</div>" : "") +
+      "</div>" +
+      '<details style="margin-top:16px"><summary style="cursor:pointer;color:var(--crm-gold);font-size:13px">صيغة الأعمدة المدعومة</summary>' +
+      '<div class="crm-muted" style="font-size:12.5px;margin-top:8px;line-height:1.9">' +
+      "Company Name*, Industry, Country, City, Website, LinkedIn, Email, Phone<br>" +
+      "Primary Contact Name, Primary Contact Email, Primary Contact Phone, Primary Contact Position<br>" +
+      "Lead Title, Lead Source, Lead Stage, Lead Priority, Lead Value, Lead Notes<br>" +
+      "يمكن أن تكون الأعمدة بأي ترتيب. مطابقة أسماء الأعمدة غير حساسة لحالة الأحرف. الأعمدة غير المعروفة تُتجاهل." +
+      "</div></details>" +
+      "</div>";
+
+    var dz = q("crmDropzone");
+    var input = q("crmFileInput");
+    input.addEventListener("change", function () { if (input.files[0]) handleFile(input.files[0]); });
+    dz.addEventListener("click", function (e) { if (e.target !== input) input.click(); });
+    dz.addEventListener("keydown", function (e) { if (e.key === "Enter" || e.key === " ") input.click(); });
+    ["dragenter", "dragover"].forEach(function (evt) {
+      dz.addEventListener(evt, function (e) { e.preventDefault(); dz.classList.add("is-dragover"); });
+    });
+    ["dragleave", "drop"].forEach(function (evt) {
+      dz.addEventListener(evt, function (e) { e.preventDefault(); dz.classList.remove("is-dragover"); });
+    });
+    dz.addEventListener("drop", function (e) {
+      var f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+      if (f) handleFile(f);
+    });
+  }
+
+  function renderPreview() {
+    var app = q("crmApp");
+    var c = previewCounts();
+    var previewRows = state.rows.slice(0, 200);
+
+    function statusBadge(r) {
+      if (!r.valid) return '<span class="crm-badge crm-badge-danger">غير صالح</span>';
+      if (r.duplicateInFile) return '<span class="crm-badge crm-badge-warning">مكرر داخل الملف</span>';
+      if (r.existingMatch) return '<span class="crm-badge crm-badge-warning">مطابق لشركة حالية</span>';
+      return '<span class="crm-badge crm-badge-success">جاهز</span>';
+    }
+    function reasonText(r) {
+      var parts = [];
+      if (r.reasons.length) parts.push(r.reasons.join("، "));
+      if (r.duplicateInFile) parts.push("تكرار داخل الملف (تطابق: " + r.duplicateMatchField + ")");
+      if (r.existingMatch) parts.push("مطابقة شركة حالية: " + CRM.escape(r.existingMatch.name) + " (" + r.existingMatch.field + ")");
+      if (r.corrections.length) parts.push(r.corrections.join("، "));
+      return parts.join(" — ") || "—";
+    }
+
+    app.innerHTML =
+      '<div class="crm-card">' +
+      '<div class="crm-section-title"><h2>معاينة قبل الاستيراد</h2><button class="crm-btn crm-btn-sm" id="crmCancelPreview">إلغاء</button></div>' +
+      '<div class="crm-kpi-grid">' +
+      '<div class="crm-kpi"><span>إجمالي الصفوف</span><strong>' + c.total + "</strong></div>" +
+      '<div class="crm-kpi"><span>صفوف صالحة</span><strong>' + c.valid + "</strong></div>" +
+      '<div class="crm-kpi"><span>صفوف غير صالحة</span><strong>' + c.invalid + "</strong></div>" +
+      '<div class="crm-kpi"><span>حقول مطلوبة مفقودة</span><strong>' + c.missingRequired + "</strong></div>" +
+      '<div class="crm-kpi"><span>صفوف مكررة</span><strong>' + c.dupTotal + "</strong><small>" + c.dupInFile + " داخل الملف · " + c.dupExisting + " مطابقة لشركات حالية</small></div>" +
+      '<div class="crm-kpi"><span>أعمدة غير معروفة</span><strong>' + state.unknownColumns.length + "</strong></div>" +
+      "</div>" +
+      (state.unknownColumns.length ? '<div class="crm-alert crm-alert-warning" style="margin-top:12px">أعمدة تم تجاهلها: ' + state.unknownColumns.map(CRM.escape).join("، ") + "</div>" : "") +
+      '<div class="crm-card" style="margin-top:16px">' +
+      '<div class="crm-section-title"><h2>خيارات الاستيراد</h2></div>' +
+      '<div class="crm-form-grid">' +
+      checkboxField("optCreateContacts", "إنشاء جهات اتصال", true) +
+      // Defaults to OFF (was ON) — importing companies for outbound
+      // outreach must not silently create sales Leads. Leave this checked
+      // only when you are intentionally importing a list of real inbound
+      // sales leads, not a prospecting/outreach list.
+      checkboxField("optCreateLeads", "إنشاء Leads (فعّل هذا فقط إذا كانت هذه قائمة Leads فعلية، وليست شركات للتواصل الخارجي)", false) +
+      checkboxField("optSkipDuplicates", "تجاوز المكررات", true) +
+      checkboxField("optUpdateExisting", "تحديث الشركة الحالية بدلاً من التجاوز", false) +
+      checkboxField("optDryRun", "تجربة فقط (بدون كتابة أي بيانات)", false) +
+      "</div>" +
+      '<p class="crm-muted" style="font-size:11.5px;margin-top:10px">إذا فُعّل ‘تحديث الشركة الحالية’ فإنه يتجاوز ‘تجاوز المكررات’ لتلك الصفوف. إذا لم يُفعّل أي منهما، يتم تجاوز المكررات افتراضيًا لتفادي إنشاء شركات مكررة عن طريق الخطأ.</p>' +
+      "</div>" +
+      '<div class="crm-table-wrap" style="margin-top:16px"><table class="crm-table"><thead><tr><th>سطر</th><th>الشركة</th><th>الحالة</th><th>التفاصيل</th></tr></thead><tbody>' +
+      previewRows.map(function (r) {
+        return "<tr><td>" + r.lineNumber + "</td><td>" + CRM.escape(r.company.name || "—") + "</td><td>" + statusBadge(r) + "</td><td style=\"font-size:12px\">" + reasonText(r) + "</td></tr>";
+      }).join("") +
+      "</tbody></table></div>" +
+      (state.rows.length > 200 ? '<p class="crm-muted" style="font-size:11.5px;margin-top:8px">يعرض أول 200 من ' + state.rows.length + " صفًا. الإحصاءات أعلاه محسوبة على كامل الملف.</p>" : "") +
+      '<div class="crm-form-actions" style="margin-top:16px">' +
+      '<button class="crm-btn" id="crmBackToUpload">رجوع</button>' +
+      '<button class="crm-btn crm-btn-primary" id="crmStartImport"' + (c.valid === 0 ? " disabled" : "") + ">بدء الاستيراد (" + c.valid + " صف)</button>" +
+      "</div></div>";
+
+    q("crmCancelPreview").addEventListener("click", resetToUpload);
+    q("crmBackToUpload").addEventListener("click", resetToUpload);
+    q("crmStartImport").addEventListener("click", startImport);
+  }
+
+  function checkboxField(id, label, checked) {
+    return '<label class="crm-field" style="flex-direction:row;align-items:center;gap:8px;cursor:pointer">' +
+      '<input type="checkbox" id="' + id + '"' + (checked ? " checked" : "") + ' style="width:18px;height:18px;min-height:auto">' +
+      "<span>" + label + "</span></label>";
+  }
+
+  function renderImporting(progress) {
+    var app = q("crmApp");
+    var pct = progress.total ? Math.round((progress.done / progress.total) * 100) : 0;
+    app.innerHTML =
+      '<div class="crm-card">' +
+      '<div class="crm-section-title"><h2>جارٍ الاستيراد…</h2><button class="crm-btn crm-btn-sm crm-btn-danger" id="crmCancelImport">إلغاء</button></div>' +
+      '<div class="crm-progress-track"><div class="crm-progress-fill" style="width:' + pct + '%"></div></div>' +
+      '<p class="crm-muted" style="margin-top:8px">' + progress.done + " من " + progress.total + " (" + pct + "%)</p>" +
+      '<div class="crm-kpi-grid" style="margin-top:12px">' +
+      '<div class="crm-kpi"><span>تم الإنشاء/التحديث</span><strong>' + (progress.results.companiesCreated + progress.results.companiesUpdated) + "</strong></div>" +
+      '<div class="crm-kpi"><span>تم التجاوز</span><strong>' + progress.results.skipped + "</strong></div>" +
+      '<div class="crm-kpi"><span>فشل</span><strong>' + progress.results.failed + "</strong></div>" +
+      '<div class="crm-kpi"><span>المتبقي</span><strong>' + (progress.total - progress.done) + "</strong></div>" +
+      '<div class="crm-kpi"><span>الوقت المتوقع للانتهاء</span><strong>' + progress.eta + "</strong></div>" +
+      "</div></div>";
+    var cancelBtn = q("crmCancelImport");
+    if (cancelBtn) cancelBtn.addEventListener("click", function () { state.cancelled = true; cancelBtn.disabled = true; cancelBtn.textContent = "جارٍ الإيقاف…"; });
+  }
+
+  function downloadErrorsCsv() {
+    var errors = state.results.errors;
+    var lines = ["line,company,reason"];
+    errors.forEach(function (e) {
+      var cells = [e.line, e.company || "", e.reason || ""].map(function (v) {
+        var s = String(v == null ? "" : v).replace(/"/g, '""');
+        return /[",\n]/.test(s) ? '"' + s + '"' : s;
+      });
+      lines.push(cells.join(","));
+    });
+    var blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url; a.download = "import-errors.csv";
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+  }
+
+  function renderResults() {
+    var app = q("crmApp");
+    var r = state.results;
+    app.innerHTML =
+      '<div class="crm-card">' +
+      '<div class="crm-section-title"><h2>' + (r.dryRun ? "نتيجة التجربة (لم تُكتب بيانات)" : "اكتمل الاستيراد") + "</h2></div>" +
+      (state.cancelled ? '<div class="crm-alert crm-alert-warning">تم إيقاف الاستيراد يدويًا — تمت معالجة الدفعات المكتملة فقط، ولن تتم معالجة الصفوف المتبقية.</div>' : "") +
+      '<div class="crm-kpi-grid">' +
+      '<div class="crm-kpi"><span>شركات تم إنشاؤها</span><strong>' + r.companiesCreated + "</strong></div>" +
+      '<div class="crm-kpi"><span>شركات تم تحديثها</span><strong>' + r.companiesUpdated + "</strong></div>" +
+      '<div class="crm-kpi"><span>جهات اتصال تم إنشاؤها</span><strong>' + r.contactsCreated + "</strong></div>" +
+      '<div class="crm-kpi"><span>Leads تم إنشاؤها</span><strong>' + r.leadsCreated + "</strong></div>" +
+      '<div class="crm-kpi"><span>تم التجاوز</span><strong>' + r.skipped + "</strong></div>" +
+      '<div class="crm-kpi"><span>أخطاء</span><strong>' + r.failed + "</strong></div>" +
+      "</div>" +
+      (r.errors.length ? '<div class="crm-form-actions" style="margin-top:14px"><button class="crm-btn" id="crmDownloadErrors">تنزيل ملف الأخطاء (CSV)</button></div>' : "") +
+      (!r.dryRun && state.importedCompanyIds && state.importedCompanyIds.size ?
+        '<div class="crm-alert crm-alert-info" style="margin-top:14px">' +
+        (state.importedCompanyIds.size >= IMPORT_SESSION_ID_CAP
+          ? "تم تجهيز أول " + IMPORT_SESSION_ID_CAP + " شركة للمراجعة السريعة (العدد الفعلي أكبر) — استخدم البحث في صفحة الشركات لباقي السجلات."
+          : "تم تجهيز " + state.importedCompanyIds.size + " شركة من هذه العملية للمراجعة السريعة.") +
+        "</div>" : "") +
+      '<div class="crm-form-actions" style="margin-top:14px">' +
+      '<button class="crm-btn crm-btn-primary" id="crmImportAnother">استيراد ملف آخر</button>' +
+      (!r.dryRun && state.importedCompanyIds && state.importedCompanyIds.size ? '<button class="crm-btn" id="crmOpenImported">فتح الشركات المستوردة</button>' : "") +
+      '<a class="crm-btn" href="companies.html">عرض كل الشركات</a>' +
+      "</div></div>";
+    var dl = q("crmDownloadErrors");
+    if (dl) dl.addEventListener("click", downloadErrorsCsv);
+    q("crmImportAnother").addEventListener("click", resetToUpload);
+    var openBtn = q("crmOpenImported");
+    if (openBtn) openBtn.addEventListener("click", openImportedCompanies);
+  }
+
+  function render() {
+    if (state.stage === "upload") renderUpload();
+    else if (state.stage === "preview") renderPreview();
+    // "importing", "results", and "blocked" are rendered directly by their
+    // drivers (startImport / renderResults / renderBlocked).
+  }
+
+  function yieldToUI() { return new Promise(function (resolve) { setTimeout(resolve, 0); }); }
+
+  function formatEta(msRemaining) {
+    if (!isFinite(msRemaining) || msRemaining <= 0) return "—";
+    var s = Math.round(msRemaining / 1000);
+    if (s < 60) return s + " ث";
+    return Math.floor(s / 60) + " د " + (s % 60) + " ث";
+  }
+
+  function companyPayloadFromRow(r) {
+    return {
+      name: r.company.name,
+      industry: r.company.industry,
+      country: r.company.country,
+      city: r.company.city,
+      website: r.company.website,
+      linkedin_url: r.company.linkedin_url,
+      email: r.company.email,
+      phone: r.company.phone
+    };
+  }
+  function isMigrationMissingError(err) {
+    var msg = (err && err.message) || "";
+    var code = (err && err.code) || "";
+    // PGRST202/PGRST301-style "could not find function" from PostgREST's
+    // schema cache, or a raw Postgres "function ... does not exist".
+    return code === "PGRST202" || /schema cache/i.test(msg) || /function\s+public\.crm_import_batch/i.test(msg) || /does not exist/i.test(msg) && /crm_import_batch/i.test(msg);
+  }
+
+  // Builds exactly the shape public.crm_import_batch()'s p_rows expects —
+  // see the function's own doc comment in CRM-SALES-OPS-UPGRADE.sql
+  // (Section 8) for the authoritative contract.
+  function buildAtomicRowPayload(r, opts) {
+    var isUpdate = !!(r.existingMatch && opts.updateExisting);
+    return {
+      line: r.lineNumber,
+      action: isUpdate ? "update" : "create",
+      existing_company_id: isUpdate ? r.existingMatch.id : null,
+      company: companyPayloadFromRow(r),
+      contact: (opts.createContacts && r.contact.full_name) ? {
+        full_name: r.contact.full_name, email: r.contact.email, phone: r.contact.phone, job_title: r.contact.job_title
+      } : null,
+      lead: opts.createLeads ? {
+        title: r.lead.title, source: r.lead.source, stage: r.lead.stage,
+        priority: r.lead.priority, estimated_value: r.lead.estimated_value, notes: r.lead.notes
+      } : null
+    };
+  }
+
+  function simulateDryRunRows(rows, opts) {
+    rows.forEach(function (r) {
+      if (r.existingMatch && opts.updateExisting) state.results.companiesUpdated++;
+      else state.results.companiesCreated++;
+      if (opts.createContacts && r.contact.full_name) state.results.contactsCreated++;
+      if (opts.createLeads) state.results.leadsCreated++;
+    });
+  }
+
+  function recordFailure(row, message) {
+    state.results.failed++;
+    state.results.errors.push({ line: row.lineNumber, company: row.company.name, reason: message });
+  }
+
+  // ATOMIC IMPORT (v1.3.1): one db.rpc(crm_import_batch) call = one Postgres
+  // transaction. If Postgres rejects any single row in that call, the
+  // function raises and the ENTIRE call's writes are rolled back together —
+  // see CRM-SALES-OPS-UPGRADE.sql Section 8 for why this needs a database
+  // function rather than several separate supabase-js insert() calls (there
+  // is no client-side "multi-table transaction" primitive in PostgREST).
+  //
+  // If a call of N rows fails, this bisects into two calls of N/2 and
+  // retries each independently, down to N=1 (a single row that still fails
+  // is recorded as a definitive per-row error). This isolates exactly which
+  // row(s) are bad without discarding every good row that happened to share
+  // a batch with a bad one — while every individual attempt, at any size,
+  // is still fully atomic on its own.
+  async function attemptAtomicRows(rows, opts) {
+    if (!rows.length || state.migrationMissing) return;
+    if (opts.dryRun) { simulateDryRunRows(rows, opts); return; }
+
+    var payload = rows.map(function (r) { return buildAtomicRowPayload(r, opts); });
+    try {
+      var res = await db.rpc("crm_import_batch", {
+        p_rows: payload,
+        p_options: { create_contacts: opts.createContacts, create_leads: opts.createLeads }
+      });
+      if (res.error) throw res.error;
+      var d = res.data || {};
+      state.results.companiesCreated += d.companies_created || 0;
+      state.results.companiesUpdated += d.companies_updated || 0;
+      state.results.contactsCreated += d.contacts_created || 0;
+      state.results.leadsCreated += d.leads_created || 0;
+      (d.touched_company_ids || []).forEach(function (id) {
+        if (state.importedCompanyIds.size < IMPORT_SESSION_ID_CAP) state.importedCompanyIds.add(id);
+      });
+    } catch (err) {
+      if (isMigrationMissingError(err)) { state.migrationMissing = true; return; }
+      if (rows.length === 1) {
+        recordFailure(rows[0], "فشلت العملية الذرية لهذا الصف بالكامل (لم يُكتب شيء له): " + (err.message || ""));
+        return;
+      }
+      var mid = Math.ceil(rows.length / 2);
+      await attemptAtomicRows(rows.slice(0, mid), opts);
+      await attemptAtomicRows(rows.slice(mid), opts);
+    }
+  }
+
+  async function processBatch(batch, opts) {
+    var toSkip = [], toWrite = [];
+    batch.forEach(function (r) {
+      // A within-file duplicate has no existing DB row to update against,
+      // so it can only ever be skipped, regardless of the options chosen.
+      if (r.duplicateInFile) { toSkip.push(r); return; }
+      if (r.existingMatch && !opts.updateExisting) { toSkip.push(r); return; } // "skip duplicates" AND the "neither checked" default
+      toWrite.push(r);
+    });
+    toSkip.forEach(function () { state.results.skipped++; });
+    await attemptAtomicRows(toWrite, opts);
+  }
+
+  async function startImport() {
+    var opts = {
+      createContacts: q("optCreateContacts").checked,
+      createLeads: q("optCreateLeads").checked,
+      skipDuplicates: q("optSkipDuplicates").checked,
+      updateExisting: q("optUpdateExisting").checked,
+      dryRun: q("optDryRun").checked
+    };
+    state.cancelled = false;
+    state.migrationMissing = false;
+    state.importedCompanyIds = new Set();
+    state.results = { companiesCreated: 0, companiesUpdated: 0, contactsCreated: 0, leadsCreated: 0, skipped: 0, failed: 0, errors: [], dryRun: opts.dryRun };
+    state.stage = "importing";
+
+    var toProcess = state.rows.filter(function (r) { return r.valid; });
+    var total = toProcess.length;
+    var done = 0;
+    var startTime = Date.now();
+    renderImporting({ total: total, done: 0, results: state.results, eta: "—" });
+
+    for (var i = 0; i < total; i += BATCH_SIZE) {
+      if (state.cancelled || state.migrationMissing) break;
+      var batch = toProcess.slice(i, i + BATCH_SIZE);
+      await processBatch(batch, opts);
+      done += batch.length;
+      var elapsed = Date.now() - startTime;
+      var msPerRow = done ? elapsed / done : 0;
+      renderImporting({ total: total, done: done, results: state.results, eta: formatEta(msPerRow * (total - done)) });
+      await yieldToUI();
+    }
+
+    if (state.migrationMissing) { state.stage = "blocked"; renderBlocked(); return; }
+    state.stage = "results";
+    renderResults();
+  }
+
+  function renderBlocked() {
+    var app = q("crmApp");
+    app.innerHTML =
+      '<div class="crm-card">' +
+      '<div class="crm-section-title"><h2>تعذّر إكمال الاستيراد</h2></div>' +
+      '<div class="crm-alert crm-alert-danger">دالة قاعدة البيانات <code>crm_import_batch</code> غير موجودة بعد في مشروع Supabase الخاص بك. لضمان عدم وجود أي كتابة جزئية (شركات/جهات اتصال/Leads بلا اكتمال)، تم إيقاف الاستيراد بالكامل ولم يتم تنفيذ أي دفعات لاحقة. شغّل النسخة المحدّثة من CRM-SALES-OPS-UPGRADE.sql في محرر SQL في Supabase، ثم أعد المحاولة.</div>' +
+      '<div class="crm-kpi-grid">' +
+      '<div class="crm-kpi"><span>تم بنجاح قبل التوقف</span><strong>' + (state.results.companiesCreated + state.results.companiesUpdated) + " شركة</strong></div>" +
+      "</div>" +
+      '<p class="crm-muted" style="font-size:12px;margin-top:10px">الدفعات التي اكتملت بنجاح قبل اكتشاف المشكلة تبقى محفوظة (كل دفعة كانت ذرّية بذاتها) — فقط الدفعات المتبقية لم تُنفَّذ إطلاقًا.</p>' +
+      '<div class="crm-form-actions" style="margin-top:14px">' +
+      '<button class="crm-btn crm-btn-primary" id="crmBackToUploadBlocked">رجوع</button>' +
+      "</div></div>";
+    q("crmBackToUploadBlocked").addEventListener("click", resetToUpload);
+  }
+
+  function openImportedCompanies() {
+    var ids = Array.from(state.importedCompanyIds);
+    try {
+      sessionStorage.setItem(IMPORT_SESSION_STORAGE_KEY, JSON.stringify({
+        ids: ids, total: ids.length, at: new Date().toISOString()
+      }));
+    } catch (e) { /* sessionStorage unavailable (private mode, quota) — link still works, just unfiltered */ }
+    window.location.href = "companies.html?importFilter=1";
+  }
+
+  async function boot() {
+    var ctx = await CRM.boot({ activeKey: "import-companies", title: "استيراد الشركات", sub: "استيراد جماعي من ملف CSV — شركات، وجهات اتصال، وLeads اختيارية", minRole: "write" });
+    if (!ctx) return;
+    db = ctx.client; who = ctx.who;
+    render();
+  }
+
+  boot();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,9 @@
+{
+  "name": "basma-website-ready-for-domain",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "node .preview-server.cjs",
+    "build": "echo Static site - no build required"
+  }
+}

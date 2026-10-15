@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>الأشخاص | Basma CRM</title>
+<link rel="icon" type="image/png" href="../assets/basma-logo-navbar.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/crm.css">
+</head>
+<body class="crm-body">
+<div class="crm-modal-overlay" id="crmModalOverlay">
+  <div class="crm-modal">
+    <h3 id="crmModalTitle">شخص جديد</h3>
+    <form id="crmForm">
+      <input type="hidden" id="rowId">
+      <div class="crm-form-grid">
+        <div class="crm-field"><label for="fName">الاسم الكامل *</label><input id="fName" required></div>
+        <div class="crm-field"><label for="fCompany">الشركة</label><select id="fCompany"><option value="">— بدون شركة —</option></select></div>
+        <div class="crm-field"><label for="fJob">المسمى الوظيفي</label><input id="fJob"></div>
+        <div class="crm-field"><label for="fEmail">البريد الإلكتروني</label><input id="fEmail" type="email"></div>
+        <div class="crm-field"><label for="fPhone">الهاتف</label><input id="fPhone"></div>
+        <div class="crm-field"><label for="fWhatsapp">واتساب</label><input id="fWhatsapp"></div>
+        <div class="crm-field"><label for="fLinkedin">رابط LinkedIn</label><input id="fLinkedin" type="url"></div>
+        <div class="crm-field"><label style="display:flex;align-items:center;gap:8px;margin-top:8px"><input type="checkbox" id="fPrimary" style="width:auto;min-height:auto"> جهة اتصال أساسية</label></div>
+        <div class="crm-field"><label style="display:flex;align-items:center;gap:8px;margin-top:8px"><input type="checkbox" id="fDecisionMaker" style="width:auto;min-height:auto"> صاحب قرار (Decision Maker)</label></div>
+      </div>
+      <div class="crm-field" style="margin-top:12px"><label for="fNotes">ملاحظات</label><textarea id="fNotes"></textarea></div>
+      <div class="crm-form-actions">
+        <button type="button" class="crm-btn" id="crmCancel">إلغاء</button>
+        <button type="submit" class="crm-btn crm-btn-primary" id="crmSave">حفظ</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="assets/crm-client.js"></script>
+<script src="assets/crm-composer.js"></script>
+<script>
+(function () {
+  "use strict";
+  var CRM = window.Basma.CRM;
+  var db, who, rows = [], companies = [];
+  var PAGE_SIZE = 25, LOOKUP_CAP = 500, page = 0, totalCount = 0, searchDebounce = null;
+
+  function companyName(id) { var c = companies.filter(function (x) { return x.id === id; })[0]; return c ? c.name : "—"; }
+
+  function openModal(row) {
+    document.getElementById("crmModalTitle").textContent = row ? "تعديل شخص" : "شخص جديد";
+    document.getElementById("rowId").value = row ? row.id : "";
+    document.getElementById("fName").value = row ? row.full_name : "";
+    document.getElementById("fCompany").value = (row && row.company_id) || "";
+    document.getElementById("fJob").value = (row && row.job_title) || "";
+    document.getElementById("fEmail").value = (row && row.email) || "";
+    document.getElementById("fPhone").value = (row && row.phone) || "";
+    document.getElementById("fWhatsapp").value = (row && row.whatsapp) || "";
+    document.getElementById("fLinkedin").value = (row && row.linkedin_url) || "";
+    document.getElementById("fPrimary").checked = !!(row && row.is_primary);
+    document.getElementById("fDecisionMaker").checked = !!(row && row.is_decision_maker);
+    document.getElementById("fNotes").value = (row && row.notes) || "";
+    document.getElementById("crmModalOverlay").classList.add("is-open");
+  }
+  function closeModal() { document.getElementById("crmModalOverlay").classList.remove("is-open"); }
+
+  async function save(event) {
+    event.preventDefault();
+    var id = document.getElementById("rowId").value;
+    var payload = {
+      full_name: document.getElementById("fName").value.trim(),
+      company_id: document.getElementById("fCompany").value || null,
+      job_title: document.getElementById("fJob").value.trim() || null,
+      email: document.getElementById("fEmail").value.trim() || null,
+      phone: document.getElementById("fPhone").value.trim() || null,
+      whatsapp: document.getElementById("fWhatsapp").value.trim() || null,
+      linkedin_url: document.getElementById("fLinkedin").value.trim() || null,
+      is_primary: document.getElementById("fPrimary").checked,
+      is_decision_maker: document.getElementById("fDecisionMaker").checked,
+      notes: document.getElementById("fNotes").value.trim() || null
+    };
+    if (!payload.full_name) { CRM.toast("الاسم الكامل مطلوب.", "danger"); return; }
+    var btn = document.getElementById("crmSave"); btn.disabled = true;
+    try {
+      var res = id ? await db.from("crm_contacts").update(payload).eq("id", id) : await db.from("crm_contacts").insert(payload);
+      if (res.error) throw res.error;
+      CRM.toast(id ? "تم التحديث." : "تمت الإضافة.", "info");
+      closeModal();
+      await load();
+    } catch (err) {
+      // is_decision_maker may not exist yet if CRM-COMPANY-360.sql hasn't
+      // been run in Supabase — fall back so the page still works.
+      if (/is_decision_maker/.test(err.message || "")) {
+        try {
+          var fallback = Object.assign({}, payload);
+          delete fallback.is_decision_maker;
+          var res2 = id ? await db.from("crm_contacts").update(fallback).eq("id", id) : await db.from("crm_contacts").insert(fallback);
+          if (res2.error) throw res2.error;
+          CRM.toast((id ? "تم التحديث" : "تمت الإضافة") + " (شغّل CRM-COMPANY-360.sql لتفعيل حقل صاحب القرار).", "warning");
+          closeModal();
+          await load();
+          return;
+        } catch (err2) { CRM.toast("تعذّر الحفظ: " + (err2.message || ""), "danger"); }
+      } else {
+        CRM.toast("تعذّر الحفظ: " + (err.message || ""), "danger");
+      }
+    }
+    finally { btn.disabled = false; }
+  }
+
+  async function remove(id) {
+    if (!CRM.confirm("حذف هذا الشخص نهائيًا؟")) return;
+    try {
+      var res = await db.from("crm_contacts").delete().eq("id", id);
+      if (res.error) throw res.error;
+      CRM.toast("تم الحذف.", "info");
+      await load();
+    } catch (err) { CRM.toast("تعذّر الحذف: " + (err.message || ""), "danger"); }
+  }
+
+  function renderPagination() {
+    var el = document.getElementById("crmPagination");
+    if (!el) return;
+    if (!totalCount) { el.innerHTML = ""; return; }
+    var start = totalCount ? page * PAGE_SIZE + 1 : 0;
+    var end = Math.min(totalCount, (page + 1) * PAGE_SIZE);
+    var hasPrev = page > 0, hasNext = end < totalCount;
+    el.innerHTML =
+      '<div class="crm-pagination-controls">' +
+      '<button class="crm-btn crm-btn-sm" id="crmPagePrev"' + (hasPrev ? "" : " disabled") + '>السابق</button>' +
+      '<span class="crm-pagination-page">عرض ' + start + '–' + end + ' من ' + totalCount + '</span>' +
+      '<button class="crm-btn crm-btn-sm" id="crmPageNext"' + (hasNext ? "" : " disabled") + '>التالي</button>' +
+      "</div>";
+    if (hasPrev) document.getElementById("crmPagePrev").addEventListener("click", function () { page -= 1; load(); });
+    if (hasNext) document.getElementById("crmPageNext").addEventListener("click", function () { page += 1; load(); });
+  }
+
+  function render() {
+    var wrap = document.getElementById("crmTableWrap"), empty = document.getElementById("crmEmpty");
+    if (!rows.length) { wrap.style.display = "none"; empty.style.display = "block"; renderPagination(); return; }
+    wrap.style.display = "block"; empty.style.display = "none";
+    document.getElementById("crmTableBody").innerHTML = rows.map(function (r) {
+      return "<tr><td>" + CRM.escape(r.full_name) + (r.is_primary ? ' <span class="crm-badge crm-badge-gold">أساسي</span>' : "") + "</td>" +
+        "<td>" + CRM.escape(companyName(r.company_id)) + "</td><td>" + CRM.escape(r.job_title || "—") + "</td>" +
+        "<td>" + CRM.escape(r.email || "—") + "</td><td dir=\"ltr\" style=\"text-align:end\">" + CRM.escape(r.phone || r.whatsapp || "—") + "</td>" +
+        "<td>" + (r.is_decision_maker ? '<span class="crm-badge crm-badge-success">نعم</span>' : "—") + "</td>" +
+        "<td style=\"white-space:nowrap;display:flex;gap:6px\">" +
+        (r.company_id && (r.email || r.whatsapp || r.phone || r.linkedin_url) ? "<button class=\"crm-btn crm-btn-sm crm-quick-send\" data-id=\"" + r.id + "\" title=\"تواصل مع هذا الشخص\">✉️ تواصل</button>" : "") +
+        (who.can_write ? "<button class=\"crm-btn crm-btn-sm crm-edit\" data-id=\"" + r.id + "\">تعديل</button>" : "") +
+        (who.is_admin ? "<button class=\"crm-btn crm-btn-sm crm-btn-danger crm-del\" data-id=\"" + r.id + "\">حذف</button>" : "") +
+        "</td></tr>";
+    }).join("");
+    document.querySelectorAll(".crm-edit").forEach(function (b) { b.addEventListener("click", function () { openModal(rows.filter(function (r) { return r.id === b.dataset.id; })[0]); }); });
+    document.querySelectorAll(".crm-del").forEach(function (b) { b.addEventListener("click", function () { remove(b.dataset.id); }); });
+    document.querySelectorAll(".crm-quick-send").forEach(function (b) { b.addEventListener("click", function () { quickSend(b.dataset.id); }); });
+    renderPagination();
+  }
+
+  function resetAndReload() { page = 0; load(); }
+
+  // Per-contact quick-send (section 2: "Send from Company 360 / Contact /
+  // Lead / Outreach Hub"). Reuses the exact same shared Composer as every
+  // other entry point — this is the only place a "send" action exists.
+  async function quickSend(contactId) {
+    var contact = rows.filter(function (r) { return r.id === contactId; })[0];
+    if (!contact || !contact.company_id) return;
+    var company = null;
+    try {
+      var res = await db.from("crm_companies").select("*").eq("id", contact.company_id).maybeSingle();
+      company = res.data;
+    } catch (e) { /* handled by the null-check below */ }
+    if (!company) { CRM.toast("تعذّر تحميل بيانات الشركة المرتبطة بهذا الشخص.", "danger"); return; }
+    var channel = contact.email ? "email" : (contact.whatsapp || contact.phone) ? "whatsapp" : "linkedin";
+    window.Basma.Composer.open({
+      db: db, company: company, contacts: [contact], defaultContactId: contact.id, channel: channel,
+      onSent: function () { load(); }
+    });
+  }
+
+  async function load() {
+    var q = (document.getElementById("fSearch").value || "").trim().replace(/[,()]/g, " ").replace(/\s+/g, " ").trim();
+    try {
+      var query = db.from("crm_contacts").select("*", { count: "exact" });
+      if (q) {
+        var matchIds = [];
+        try {
+          var companyMatches = await db.from("crm_companies").select("id").ilike("name", "%" + q + "%").limit(200);
+          (companyMatches.data || []).forEach(function (c) { matchIds.push(c.id); });
+        } catch (e) { /* non-fatal */ }
+        var orParts = ["full_name.ilike.%" + q + "%", "email.ilike.%" + q + "%", "phone.ilike.%" + q + "%"];
+        if (matchIds.length) orParts.push("company_id.in.(" + matchIds.join(",") + ")");
+        query = query.or(orParts.join(","));
+      }
+      query = query.order("full_name", { ascending: true }).range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1);
+      var res = await query;
+      if (res.error) throw res.error;
+      rows = res.data || [];
+      totalCount = res.count || 0;
+      render();
+    } catch (err) { CRM.toast("تعذّر التحميل: " + (err.message || ""), "danger"); }
+  }
+
+  async function boot() {
+    var ctx = await CRM.boot({ activeKey: "contacts", title: "الأشخاص", sub: "جهات الاتصال المرتبطة بالشركات والعملاء المحتملين" });
+    if (!ctx) return;
+    db = ctx.client; who = ctx.who;
+    document.getElementById("crmTopbarActions").innerHTML = who.can_write ? '<button class="crm-btn crm-btn-primary" id="crmAdd">+ إضافة شخص</button>' : "";
+    document.getElementById("crmApp").innerHTML =
+      '<div class="crm-card"><div class="crm-field" style="max-width:320px"><label>بحث</label><input id="fSearch"></div></div>' +
+      '<div class="crm-table-wrap" id="crmTableWrap"><table class="crm-table"><thead><tr><th>الاسم</th><th>الشركة</th><th>المسمى الوظيفي</th><th>البريد</th><th>الهاتف</th><th>صاحب قرار</th><th>الإجراءات</th></tr></thead><tbody id="crmTableBody"></tbody></table></div>' +
+      '<div class="crm-pagination" id="crmPagination"></div>' +
+      '<div class="crm-card crm-empty" id="crmEmpty" style="display:none"><h2 style="color:#fbf7f0">لا يوجد أشخاص بعد</h2><p>أضف أول جهة اتصال لتبدأ.</p></div>';
+    if (who.can_write) document.getElementById("crmAdd").addEventListener("click", function () { openModal(null); });
+    document.getElementById("crmCancel").addEventListener("click", closeModal);
+    document.getElementById("crmForm").addEventListener("submit", save);
+    document.getElementById("fSearch").addEventListener("input", function () {
+      clearTimeout(searchDebounce);
+      searchDebounce = setTimeout(resetAndReload, 350);
+    });
+
+    var companiesRes = await db.from("crm_companies").select("id,name").order("name").limit(LOOKUP_CAP);
+    companies = companiesRes.data || [];
+    document.getElementById("fCompany").innerHTML = '<option value="">— بدون شركة —</option>' + companies.map(function (c) { return '<option value="' + c.id + '">' + CRM.escape(c.name) + "</option>"; }).join("");
+
+    await load();
+  }
+
+  boot();
+})();
+</script>
+</body>
+</html>

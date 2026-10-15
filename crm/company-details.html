@@ -1,0 +1,1297 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>تفاصيل الشركة | Basma CRM</title>
+<link rel="icon" type="image/png" href="../assets/basma-logo-navbar.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/crm.css">
+</head>
+<body class="crm-body">
+
+<div class="crm-modal-overlay" id="crmTaskModalOverlay">
+  <div class="crm-modal">
+    <h3>مهمة جديدة</h3>
+    <form id="crmTaskForm">
+      <div class="crm-field"><label for="taskTitle">العنوان *</label><input id="taskTitle" required></div>
+      <div class="crm-form-grid" style="margin-top:12px">
+        <div class="crm-field"><label for="taskPriority">الأولوية</label><select id="taskPriority"><option value="low">منخفضة</option><option value="medium" selected>متوسطة</option><option value="high">عالية</option><option value="urgent">عاجلة</option></select></div>
+        <div class="crm-field"><label for="taskDue">تاريخ الاستحقاق</label><input id="taskDue" type="datetime-local"></div>
+      </div>
+      <div class="crm-field" style="margin-top:12px"><label for="taskDesc">الوصف</label><textarea id="taskDesc"></textarea></div>
+      <div class="crm-form-actions">
+        <button type="button" class="crm-btn" data-close>إلغاء</button>
+        <button type="submit" class="crm-btn crm-btn-primary">حفظ</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="crm-modal-overlay" id="crmMeetingModalOverlay">
+  <div class="crm-modal">
+    <h3>جدولة اجتماع</h3>
+    <form id="crmMeetingForm">
+      <div class="crm-field"><label for="mtTitle">العنوان *</label><input id="mtTitle" required></div>
+      <div class="crm-form-grid" style="margin-top:12px">
+        <div class="crm-field"><label for="mtType">النوع</label><select id="mtType"><option value="call">مكالمة</option><option value="online" selected>عن بعد</option><option value="in_person">حضوري</option></select></div>
+        <div class="crm-field"><label for="mtWhen">الموعد *</label><input id="mtWhen" type="datetime-local" required></div>
+        <div class="crm-field"><label for="mtDuration">المدة (دقيقة)</label><input id="mtDuration" type="number" min="5" value="30"></div>
+        <div class="crm-field"><label for="mtLocation">المكان / الرابط</label><input id="mtLocation"></div>
+      </div>
+      <div class="crm-field" style="margin-top:12px"><label for="mtNotes">ملاحظات</label><textarea id="mtNotes"></textarea></div>
+      <div class="crm-form-actions">
+        <button type="button" class="crm-btn" data-close>إلغاء</button>
+        <button type="submit" class="crm-btn crm-btn-primary">حفظ</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="crm-modal-overlay" id="crmEditModalOverlay">
+  <div class="crm-modal">
+    <h3>تحديث حالة التواصل</h3>
+    <form id="crmEditForm">
+      <div class="crm-form-grid">
+        <div class="crm-field"><label for="edOutreach">حالة التواصل</label><select id="edOutreach"></select></div>
+        <div class="crm-field"><label for="edAssigned">مسؤول المبيعات</label><select id="edAssigned"><option value="">— غير محدد —</option></select></div>
+      </div>
+      <div class="crm-field" style="margin-top:12px"><label for="edNotes">ملاحظة (اختياري)</label><textarea id="edNotes"></textarea></div>
+      <div class="crm-form-actions">
+        <button type="button" class="crm-btn" data-close>إلغاء</button>
+        <button type="submit" class="crm-btn crm-btn-primary">حفظ</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="crm-modal-overlay" id="crmContactModalOverlay">
+  <div class="crm-modal">
+    <h3 id="crmContactModalTitle">جهة اتصال جديدة</h3>
+    <form id="crmContactForm">
+      <input type="hidden" id="ctId">
+      <div class="crm-form-grid">
+        <div class="crm-field"><label for="ctName">الاسم الكامل *</label><input id="ctName" required></div>
+        <div class="crm-field"><label for="ctJob">المنصب</label><input id="ctJob"></div>
+        <div class="crm-field"><label for="ctEmail">البريد الإلكتروني</label><input id="ctEmail" type="email"></div>
+        <div class="crm-field"><label for="ctPhone">الهاتف</label><input id="ctPhone"></div>
+        <div class="crm-field"><label for="ctWhatsapp">واتساب</label><input id="ctWhatsapp"></div>
+        <div class="crm-field"><label for="ctLinkedin">رابط LinkedIn</label><input id="ctLinkedin" type="url"></div>
+      </div>
+      <div style="display:flex;gap:18px;margin-top:12px;flex-wrap:wrap">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="ctPrimary" style="width:18px;height:18px;min-height:auto"> جهة اتصال أساسية</label>
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="ctDecisionMaker" style="width:18px;height:18px;min-height:auto"> صاحب قرار (Decision Maker)</label>
+      </div>
+      <div class="crm-field" style="margin-top:12px"><label for="ctNotes">ملاحظات</label><textarea id="ctNotes"></textarea></div>
+      <div class="crm-form-actions">
+        <button type="button" class="crm-btn" data-close>إلغاء</button>
+        <button type="submit" class="crm-btn crm-btn-primary">حفظ</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="crm-modal-overlay" id="crmCallModalOverlay">
+  <div class="crm-modal">
+    <h3>مكالمة هاتفية</h3>
+    <p class="crm-muted" style="font-size:12.5px;margin-top:-6px;margin-bottom:10px" id="crmCallNumberHint"></p>
+    <button type="button" class="crm-btn" id="crmCallNowBtn" style="margin-bottom:14px">اتصال الآن</button>
+    <form id="crmCallForm">
+      <div class="crm-field"><label for="callOutcome">نتيجة المكالمة *</label>
+        <select id="callOutcome" required>
+          <option value="no_answer">لم يتم الرد</option>
+          <option value="interested">مهتم</option>
+          <option value="not_interested">غير مهتم</option>
+          <option value="call_back">معاودة الاتصال لاحقًا</option>
+          <option value="meeting_requested">طلب اجتماع</option>
+        </select>
+      </div>
+      <div class="crm-field" style="margin-top:12px"><label for="callNotes">ملاحظات</label><textarea id="callNotes"></textarea></div>
+      <div class="crm-field" style="margin-top:12px"><label for="callFollowUp">جدولة متابعة</label>
+        <select id="callFollowUp"><option value="">بدون متابعة</option><option value="1">يوم واحد</option><option value="2">يومين</option><option value="3">3 أيام</option><option value="5" selected>5 أيام</option><option value="7">7 أيام</option><option value="14">14 يومًا</option></select>
+      </div>
+      <div class="crm-form-actions">
+        <button type="button" class="crm-btn" data-close>إلغاء</button>
+        <button type="submit" class="crm-btn crm-btn-primary">حفظ نتيجة المكالمة</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="crm-modal-overlay" id="crmFollowupModalOverlay">
+  <div class="crm-modal">
+    <h3>جدولة متابعة</h3>
+    <form id="crmFollowupForm">
+      <div class="crm-form-grid">
+        <div class="crm-field"><label for="fuChannel">القناة (للسياق فقط)</label>
+          <select id="fuChannel"><option value="manual">عام</option><option value="email">بريد إلكتروني</option><option value="whatsapp">واتساب</option><option value="linkedin">LinkedIn</option><option value="phone">هاتف</option></select>
+        </div>
+        <div class="crm-field"><label for="fuDays">بعد</label>
+          <select id="fuDays"><option value="1">يوم واحد</option><option value="2">يومين</option><option value="3">3 أيام</option><option value="5" selected>5 أيام</option><option value="7">7 أيام</option><option value="14">14 يومًا</option><option value="custom">مخصص…</option></select>
+        </div>
+      </div>
+      <div class="crm-field" style="margin-top:12px" id="fuCustomWrap"><label for="fuCustomDays">عدد الأيام</label><input id="fuCustomDays" type="number" min="1"></div>
+      <div class="crm-form-actions">
+        <button type="button" class="crm-btn" data-close>إلغاء</button>
+        <button type="submit" class="crm-btn crm-btn-primary">جدولة</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="assets/crm-client.js"></script>
+<script src="assets/crm-composer.js"></script>
+<script>
+(function () {
+  "use strict";
+  var CRM = window.Basma.CRM;
+  var STAGE_LABELS = { new: "جديد", contacted: "تم التواصل", qualified: "مؤهل", meeting_scheduled: "اجتماع مجدول", proposal_sent: "أرسل العرض", negotiation: "تفاوض", won: "فاز", lost: "خسر" };
+  var ACTIVITY_LABELS = { note: "ملاحظة", call: "مكالمة", email: "بريد", whatsapp: "واتساب", meeting: "اجتماع", follow_up: "متابعة", status_change: "تغيير حالة", proposal: "عرض سعر", linkedin: "LinkedIn", company_imported: "استيراد الشركة", contact_added: "جهة اتصال جديدة" };
+  var PRIORITY_LABELS = { low: "منخفضة", medium: "متوسطة", high: "عالية", urgent: "عاجلة" };
+  var EMAIL_STATUS_LABELS = { not_sent: "لم يُرسل", sent: "تم الإرسال", opened: "تم الفتح", replied: "تم الرد", interested: "مهتم", not_interested: "غير مهتم" };
+  var LINKEDIN_STATUS_LABELS = { not_contacted: "لم يتم التواصل", connection_sent: "طلب اتصال مُرسل", connected: "تم الاتصال", message_sent: "رسالة مُرسلة", replied: "تم الرد" };
+  var WHATSAPP_OUTREACH_LABELS = { not_sent: "لم يُرسل", sent: "تم الإرسال", read: "تمت القراءة", replied: "تم الرد" };
+  var PHONE_STATUS_LABELS = { not_called: "لم يتم الاتصال", called: "تم الاتصال", follow_up_required: "يتطلب متابعة" };
+  var RESPONSE_STATUS_LABELS = { none: "بدون تصنيف", waiting_reply: "بانتظار الرد", replied: "تم الرد", interested: "مهتم", not_interested: "غير مهتم", meeting_requested: "طلب اجتماع", proposal_requested: "طلب عرض سعر" };
+  var CALL_OUTCOME_LABELS = { no_answer: "لم يتم الرد", interested: "مهتم", not_interested: "غير مهتم", call_back: "معاودة الاتصال لاحقًا", meeting_requested: "طلب اجتماع" };
+  var CHANNEL_LABELS_V16 = { email: "بريد إلكتروني", whatsapp: "واتساب", linkedin: "LinkedIn", phone: "مكالمة هاتفية" };
+  var TASK_STATUS_LABELS = { pending: "قيد الانتظار", in_progress: "قيد التنفيذ", completed: "مكتملة", cancelled: "ملغاة" };
+  var MEETING_TYPE_LABELS = { call: "مكالمة", online: "عن بعد", in_person: "حضوري" };
+  var MEETING_STATUS_LABELS = { scheduled: "مجدول", completed: "منتهٍ", cancelled: "ملغى", rescheduled: "أُعيدت جدولته" };
+  var PROPOSAL_STATUS_LABELS = { draft: "مسودة", sent: "أُرسل", viewed: "تمت مشاهدته", accepted: "مقبول", rejected: "مرفوض", expired: "منتهي الصلاحية" };
+  var OUTREACH_LABELS = {
+    not_contacted: "لم يتم التواصل", researching: "قيد البحث", contacted: "تم التواصل", replied: "تم الرد",
+    meeting_scheduled: "اجتماع مجدول", proposal_sent: "أُرسل العرض", negotiating: "تفاوض", won: "فاز", lost: "خسر"
+  };
+  var OUTREACH_BADGE = {
+    not_contacted: "mute", researching: "gold", contacted: "gold", replied: "warning",
+    meeting_scheduled: "gold", proposal_sent: "warning", negotiating: "warning", won: "success", lost: "danger"
+  };
+  var FILES_BUCKET = "crm-company-files";
+  var MAX_FILE_BYTES = 20 * 1024 * 1024;
+  var ALLOWED_FILE_EXT = [".pdf", ".doc", ".docx", ".png", ".jpg", ".jpeg", ".webp", ".gif"];
+
+  var companyId = new URLSearchParams(window.location.search).get("id");
+  var db, who, members = [];
+  var company = null, leads = [], contacts = [], files = [];
+  var outreach = null; // crm_outreach row (v1.4 Sales Outreach Hub) — null until loaded, or if CRM-OUTREACH-HUB.sql hasn't been run yet
+  var hasOutreachColumns = true;
+  var hasDecisionMakerColumn = true; // crm_contacts.is_decision_maker — CRM-COMPANY-360.sql
+  var hasFilesTable = true; // crm_company_files — CRM-COMPANY-360.sql
+  var timelineSort = "desc";
+
+  function q(id) { return document.getElementById(id); }
+  function openOverlay(id) { q(id).classList.add("is-open"); }
+  function closeOverlay(id) { q(id).classList.remove("is-open"); }
+  document.addEventListener("click", function (e) {
+    if (e.target.matches("[data-close]")) { e.target.closest(".crm-modal-overlay").classList.remove("is-open"); }
+  });
+
+  function primaryContact() {
+    if (!contacts.length) return null;
+    return contacts.filter(function (c) { return c.is_primary; })[0] || contacts[0];
+  }
+  function memberName(id) { if (!id) return "—"; var m = members.filter(function (x) { return x.user_id === id; })[0]; return m ? (m.full_name || id.slice(0, 8)) : id.slice(0, 8); }
+  function leadIdsCsv() { return leads.map(function (l) { return l.id; }).join(","); }
+  function relatedFilter() {
+    var csv = leadIdsCsv();
+    return "company_id.eq." + companyId + (csv ? ",lead_id.in.(" + csv + ")" : "");
+  }
+
+  async function reloadCompany() {
+    var res = await db.from("crm_companies").select("*").eq("id", companyId).single();
+    if (res.error) throw res.error;
+    company = res.data;
+    hasOutreachColumns = Object.prototype.hasOwnProperty.call(company, "outreach_status");
+
+    // Capped per-company (not a global "load all records" scan, but bounded
+    // defensively in case one company accumulates an unusually large number
+    // of leads/contacts over time).
+    var COMPANY_RELATED_CAP = 300;
+    var leadsRes = await db.from("crm_leads").select("id,title,stage,status,estimated_value,currency,next_follow_up_at,last_contact_at,created_at").eq("company_id", companyId).order("created_at", { ascending: false }).limit(COMPANY_RELATED_CAP);
+    leads = leadsRes.data || [];
+
+    var contactsRes = await db.from("crm_contacts").select("*").eq("company_id", companyId).order("is_primary", { ascending: false }).order("full_name", { ascending: true }).limit(COMPANY_RELATED_CAP);
+    contacts = contactsRes.data || [];
+    hasDecisionMakerColumn = !contacts.length || Object.prototype.hasOwnProperty.call(contacts[0], "is_decision_maker");
+
+    renderHeader();
+    renderContactsSection();
+    renderNotesSection();
+  }
+
+  // ======================================================================
+  // 1) Company info — editable fields + contact-method action buttons
+  // ======================================================================
+  function onlyDigits(v) { return (v || "").replace(/[^\d]/g, ""); }
+
+  function copyToClipboard(text, okMsg) {
+    if (!text) return;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () { CRM.toast(okMsg || "تم النسخ.", "info"); })
+        .catch(function () { CRM.toast("تعذّر النسخ التلقائي.", "warning"); });
+    } else {
+      CRM.toast("تعذّر النسخ التلقائي — انسخ يدويًا: " + text, "warning");
+    }
+  }
+
+  function openLinkedinLink() {
+    var url = (company && company.linkedin_url) || (primaryContact() || {}).linkedin_url;
+    if (!url) { CRM.toast("لا يوجد رابط LinkedIn مسجّل.", "warning"); return; }
+    window.open(/^https?:\/\//i.test(url) ? url : "https://" + url, "_blank", "noopener");
+  }
+  function openWebsiteLink() {
+    var url = company && company.website;
+    if (!url) { CRM.toast("لا يوجد موقع إلكتروني مسجّل.", "warning"); return; }
+    window.open(/^https?:\/\//i.test(url) ? url : "https://" + url, "_blank", "noopener");
+  }
+  function callNumber() {
+    var phone = (company && company.phone) || (primaryContact() || {}).phone;
+    if (!phone) { CRM.toast("لا يوجد رقم هاتف مسجّل.", "warning"); return; }
+    window.location.href = "tel:" + onlyDigits(phone);
+  }
+
+  function renderContactButtons() {
+    var email = (company.email) || (primaryContact() || {}).email;
+    var btns = [
+      { id: "cbWebsite", label: "زيارة الموقع", disabled: !company.website },
+      { id: "cbLinkedin", label: "فتح LinkedIn", disabled: !(company.linkedin_url || (primaryContact() || {}).linkedin_url) },
+      { id: "cbEmail", label: "إرسال بريد", disabled: !email },
+      { id: "cbCopyEmail", label: "نسخ البريد", disabled: !email },
+      { id: "cbCall", label: "اتصال", disabled: !(company.phone || (primaryContact() || {}).phone) }
+    ];
+    return btns.map(function (b) { return '<button type="button" class="crm-btn crm-btn-sm" id="' + b.id + '"' + (b.disabled ? " disabled" : "") + ">" + b.label + "</button>"; }).join("");
+  }
+
+  function companyField(label, id, value, type) {
+    type = type || "text";
+    return '<div class="crm-field"><label for="' + id + '">' + label + "</label><input id=\"" + id + "\" type=\"" + type + "\" value=\"" + CRM.escape(value || "") + '"></div>';
+  }
+
+  function renderCompanyForm() {
+    var canWrite = who.can_write;
+    return '<form id="crmCompanyForm">' +
+      '<div class="crm-form-grid" style="margin-top:16px">' +
+      companyField("اسم الشركة *", "cfName", company.name) +
+      companyField("الموقع الإلكتروني", "cfWebsite", company.website, "url") +
+      companyField("الدولة", "cfCountry", company.country) +
+      companyField("المدينة", "cfCity", company.city) +
+      companyField("القطاع", "cfIndustry", company.industry) +
+      companyField("الهاتف", "cfPhone", company.phone) +
+      companyField("البريد الإلكتروني", "cfEmail", company.email, "email") +
+      companyField("رابط LinkedIn", "cfLinkedin", company.linkedin_url, "url") +
+      "</div>" +
+      '<div class="crm-field" style="margin-top:12px"><label for="cfAddress">العنوان</label><input id="cfAddress" value="' + CRM.escape(company.address || "") + '"></div>' +
+      '<div class="crm-field" style="margin-top:12px"><label for="cfNotes">ملاحظات عامة</label><textarea id="cfNotes">' + CRM.escape(company.notes || "") + "</textarea></div>" +
+      (canWrite ? '<div class="crm-form-actions"><button type="submit" class="crm-btn crm-btn-primary">حفظ بيانات الشركة</button></div>' : "") +
+      "</form>";
+  }
+
+  async function saveCompanyInfo(e) {
+    e.preventDefault();
+    var payload = {
+      name: q("cfName").value.trim(),
+      website: q("cfWebsite").value.trim() || null,
+      country: q("cfCountry").value.trim() || null,
+      city: q("cfCity").value.trim() || null,
+      industry: q("cfIndustry").value.trim() || null,
+      phone: q("cfPhone").value.trim() || null,
+      email: q("cfEmail").value.trim() || null,
+      linkedin_url: q("cfLinkedin").value.trim() || null,
+      address: q("cfAddress").value.trim() || null,
+      notes: q("cfNotes").value.trim() || null
+    };
+    if (!payload.name) { CRM.toast("اسم الشركة مطلوب.", "danger"); return; }
+    try {
+      var res = await db.from("crm_companies").update(payload).eq("id", companyId);
+      if (res.error) throw res.error;
+      CRM.toast("تم حفظ بيانات الشركة.", "info");
+      await reloadCompany();
+    } catch (err) { CRM.toast("تعذّر الحفظ: " + (err.message || ""), "danger"); }
+  }
+
+  // ======================================================================
+  // Outreach card (v1.4 Sales Outreach Hub) + per-channel summary (v1.5)
+  // ======================================================================
+  function selectOptions(labels, current) {
+    return Object.keys(labels).map(function (k) {
+      return '<option value="' + k + '"' + (k === current ? " selected" : "") + ">" + labels[k] + "</option>";
+    }).join("");
+  }
+
+  async function loadOutreach() {
+    try {
+      var res = await db.from("crm_outreach").select("*").eq("company_id", companyId).maybeSingle();
+      if (res.error) throw res.error;
+      outreach = res.data || null;
+    } catch (err) {
+      // Table doesn't exist yet if CRM-OUTREACH-HUB.sql hasn't been run —
+      // degrade to a visible notice instead of breaking the whole page,
+      // matching the outreach_status/assigned_to fallback pattern above.
+      outreach = null;
+    }
+    renderOutreachCard();
+    renderCommunicationSection();
+  }
+
+  function channelSummaryRow(label, status, statusLabels, lastContactAt) {
+    return "<tr><td>" + label + "</td><td>" + CRM.escape(statusLabels[status] || status || "—") + "</td>" +
+      "<td>" + (lastContactAt ? CRM.formatDateTime(lastContactAt) : "—") + "</td>" +
+      "<td>" + (outreach.next_follow_up_date ? CRM.formatDate(outreach.next_follow_up_date) + (outreach.next_follow_up_time ? " " + String(outreach.next_follow_up_time).slice(0, 5) : "") : "—") + "</td>" +
+      "<td>" + CRM.escape(memberName(company.assigned_to)) + "</td></tr>";
+  }
+
+  function renderOutreachSummaryTable() {
+    if (!outreach) return "";
+    return '<div class="crm-table-wrap" style="margin-bottom:16px"><table class="crm-table"><thead><tr><th>القناة</th><th>الحالة</th><th>آخر تواصل</th><th>المتابعة القادمة</th><th>المسؤول</th></tr></thead><tbody>' +
+      channelSummaryRow("البريد الإلكتروني", outreach.email_status, EMAIL_STATUS_LABELS, outreach.email_last_contact_at) +
+      channelSummaryRow("LinkedIn", outreach.linkedin_status, LINKEDIN_STATUS_LABELS, outreach.linkedin_last_contact_at) +
+      channelSummaryRow("واتساب", outreach.whatsapp_status, WHATSAPP_OUTREACH_LABELS, outreach.whatsapp_last_contact_at) +
+      channelSummaryRow("مكالمة هاتفية", outreach.phone_status, PHONE_STATUS_LABELS, outreach.phone_last_contact_at) +
+      "</tbody></table></div>";
+  }
+
+  function renderOutreachCard() {
+    var wrap = document.getElementById("crmOutreachWrap");
+    if (!outreach) {
+      wrap.innerHTML = '<div class="crm-section-title"><h2>Outreach</h2></div>' +
+        '<div class="crm-alert crm-alert-warning">شغّل ملف CRM-OUTREACH-HUB.sql في Supabase لتفعيل قسم Outreach لهذه الشركة.</div>';
+      return;
+    }
+    var canWrite = who.can_write;
+    var hasLastContactCols = Object.prototype.hasOwnProperty.call(outreach, "email_last_contact_at");
+    var hasResponseStatus = Object.prototype.hasOwnProperty.call(outreach, "response_status");
+    wrap.innerHTML =
+      '<div class="crm-section-title"><h2>Outreach</h2></div>' +
+      (hasResponseStatus ? renderResponseStatusControl() : "") +
+      (hasLastContactCols ? renderOutreachSummaryTable() : '<div class="crm-alert crm-alert-warning" style="margin-bottom:14px">شغّل ملف CRM-COMPANY-360.sql لعرض "آخر تواصل" لكل قناة.</div>') +
+      '<form id="crmOutreachForm">' +
+      '<div class="crm-form-grid">' +
+      '<div class="crm-field"><label for="ocEmail">البريد الإلكتروني</label><select id="ocEmail"' + (canWrite ? "" : " disabled") + ">" + selectOptions(EMAIL_STATUS_LABELS, outreach.email_status) + "</select></div>" +
+      '<div class="crm-field"><label for="ocLinkedin">LinkedIn</label><select id="ocLinkedin"' + (canWrite ? "" : " disabled") + ">" + selectOptions(LINKEDIN_STATUS_LABELS, outreach.linkedin_status) + "</select></div>" +
+      '<div class="crm-field"><label for="ocWhatsapp">واتساب</label><select id="ocWhatsapp"' + (canWrite ? "" : " disabled") + ">" + selectOptions(WHATSAPP_OUTREACH_LABELS, outreach.whatsapp_status) + "</select></div>" +
+      '<div class="crm-field"><label for="ocPhone">مكالمة هاتفية</label><select id="ocPhone"' + (canWrite ? "" : " disabled") + ">" + selectOptions(PHONE_STATUS_LABELS, outreach.phone_status) + "</select></div>" +
+      '<div class="crm-field"><label for="ocFollowUpDate">تاريخ المتابعة القادمة</label><input type="date" id="ocFollowUpDate" value="' + (outreach.next_follow_up_date || "") + '"' + (canWrite ? "" : " disabled") + "></div>" +
+      '<div class="crm-field"><label for="ocFollowUpTime">وقت المتابعة</label><input type="time" id="ocFollowUpTime" value="' + (outreach.next_follow_up_time ? outreach.next_follow_up_time.slice(0, 5) : "") + '"' + (canWrite ? "" : " disabled") + "></div>" +
+      '<div class="crm-field"><label for="ocPriority">الأولوية</label><select id="ocPriority"' + (canWrite ? "" : " disabled") + ">" + selectOptions(PRIORITY_LABELS, outreach.priority) + "</select></div>" +
+      '<label class="crm-field" style="flex-direction:row;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="ocReminder"' + (outreach.reminder_enabled ? " checked" : "") + (canWrite ? "" : " disabled") + ' style="width:18px;height:18px;min-height:auto"><span>تذكير مفعّل</span></label>' +
+      '<label class="crm-field" style="flex-direction:row;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="ocIsClient"' + (outreach.is_client ? " checked" : "") + (canWrite ? "" : " disabled") + ' style="width:18px;height:18px;min-height:auto"><span>عميل</span></label>' +
+      "</div>" +
+      '<div class="crm-field" style="margin-top:12px"><label for="ocNotes">ملاحظات</label><textarea id="ocNotes"' + (canWrite ? "" : " disabled") + ">" + CRM.escape(outreach.notes || "") + "</textarea></div>" +
+      (canWrite ? '<div class="crm-form-actions"><button type="submit" class="crm-btn crm-btn-primary">حفظ Outreach</button></div>' : "") +
+      "</form>";
+
+    if (canWrite) {
+      document.getElementById("crmOutreachForm").addEventListener("submit", saveOutreach);
+      var respSel = document.getElementById("ocResponseStatus");
+      if (respSel) respSel.addEventListener("change", function () { setResponseStatus(this.value); });
+      var meetingBtn = document.getElementById("ocCreateMeetingBtn");
+      if (meetingBtn) meetingBtn.addEventListener("click", function () {
+        q("mtTitle").value = ""; q("mtWhen").value = ""; q("mtLocation").value = ""; q("mtNotes").value = ""; q("mtDuration").value = 30;
+        openOverlay("crmMeetingModalOverlay");
+      });
+    }
+  }
+
+  // ---- 11) Response / outcome tracking (v1.6 Unified Outreach Automation) ----
+  function renderResponseStatusControl() {
+    var status = outreach.response_status || "none";
+    return '<div class="crm-flex-between" style="margin-bottom:14px;padding:10px 12px;border:1px solid var(--crm-border);border-radius:10px">' +
+      '<div class="crm-field" style="min-width:220px"><label for="ocResponseStatus">حالة الرد</label><select id="ocResponseStatus"' + (who.can_write ? "" : " disabled") + ">" + selectOptions(RESPONSE_STATUS_LABELS, status) + "</select></div>" +
+      (status === "meeting_requested" && who.can_write ? '<button type="button" class="crm-btn crm-btn-sm crm-btn-primary" id="ocCreateMeetingBtn">إنشاء اجتماع</button>' : "") +
+      "</div>";
+  }
+
+  async function setResponseStatus(newStatus) {
+    try {
+      var res = await db.rpc("crm_set_response_status", { p_company_id: companyId, p_status: newStatus });
+      if (res.error) throw res.error;
+      if (RESPONSE_STATUS_LABELS[newStatus]) await logActivity("status_change", "حالة الرد: " + RESPONSE_STATUS_LABELS[newStatus]);
+      CRM.toast("تم تحديث حالة الرد.", "info");
+      await loadOutreach();
+      await renderTabs();
+    } catch (err) { CRM.toast("تعذّر التحديث: " + (err.message || ""), "danger"); }
+  }
+
+  async function saveOutreach(e) {
+    e.preventDefault();
+    var payload = {
+      email_status: q("ocEmail").value,
+      linkedin_status: q("ocLinkedin").value,
+      whatsapp_status: q("ocWhatsapp").value,
+      phone_status: q("ocPhone").value,
+      next_follow_up_date: q("ocFollowUpDate").value || null,
+      next_follow_up_time: q("ocFollowUpTime").value || null,
+      priority: q("ocPriority").value,
+      reminder_enabled: q("ocReminder").checked,
+      is_client: q("ocIsClient").checked,
+      notes: q("ocNotes").value.trim() || null
+    };
+    var previous = outreach;
+    try {
+      var res = await db.from("crm_outreach").update(payload).eq("company_id", companyId);
+      if (res.error) throw res.error;
+
+      // Timeline (reuses crm_activities — see CRM-OUTREACH-HUB.sql Section 3):
+      // log ONLY the channel-status changes, matching the requested example
+      // (Email Sent / LinkedIn Message Sent / WhatsApp Sent / Lead
+      // Interested...) — follow-up date/priority/notes are saved silently,
+      // same way editing a lead's follow-up date doesn't spam the timeline.
+      var logs = [];
+      if (previous.email_status !== payload.email_status) logs.push(["email", "البريد الإلكتروني: " + EMAIL_STATUS_LABELS[payload.email_status]]);
+      if (previous.linkedin_status !== payload.linkedin_status) logs.push(["linkedin", "LinkedIn: " + LINKEDIN_STATUS_LABELS[payload.linkedin_status]]);
+      if (previous.whatsapp_status !== payload.whatsapp_status) logs.push(["whatsapp", "واتساب: " + WHATSAPP_OUTREACH_LABELS[payload.whatsapp_status]]);
+      if (previous.phone_status !== payload.phone_status) logs.push(["call", "حالة الاتصال الهاتفي: " + PHONE_STATUS_LABELS[payload.phone_status]]);
+      if (!previous.is_client && payload.is_client) logs.push(["status_change", "أصبحت الشركة عميلاً"]);
+      for (var i = 0; i < logs.length; i++) {
+        try { await logActivity(logs[i][0], logs[i][1]); } catch (e2) { /* non-fatal — the outreach save above already succeeded */ }
+      }
+
+      CRM.toast("تم حفظ بيانات Outreach.", "info");
+      await loadOutreach();
+      await computeAndRenderKpis();
+      if (logs.length) await renderTabs();
+    } catch (err) { CRM.toast("تعذّر الحفظ: " + (err.message || ""), "danger"); }
+  }
+
+  async function convertToClient() {
+    if (!outreach) { CRM.toast("شغّل ملف CRM-OUTREACH-HUB.sql أولًا لتفعيل هذه الميزة.", "warning"); return; }
+    if (outreach.is_client) { CRM.toast("الشركة مصنّفة كعميل بالفعل.", "info"); return; }
+    if (!CRM.confirm("تحويل \"" + company.name + "\" إلى عميل؟")) return;
+    try {
+      var res = await db.from("crm_outreach").update({ is_client: true }).eq("company_id", companyId);
+      if (res.error) throw res.error;
+      await logActivity("status_change", "أصبحت الشركة عميلاً");
+      CRM.toast("تم التحويل إلى عميل.", "info");
+      await loadOutreach();
+      await computeAndRenderKpis();
+      await renderTabs();
+    } catch (err) { CRM.toast("تعذّر التحويل: " + (err.message || ""), "danger"); }
+  }
+
+  function infoItem(label, value) {
+    return '<div><span class="crm-muted" style="font-size:11.5px">' + label + "</span><div>" + CRM.escape(value || "—") + "</div></div>";
+  }
+
+  function renderHeader() {
+    document.getElementById("crmTopbarActions").innerHTML = "";
+    var canWrite = who.can_write;
+    var head = document.getElementById("crmCompanyHead");
+    var outreachLegacy = (company.outreach_status || "not_contacted");
+    var openLeadsCount = leads.filter(function (l) { return l.status === "open"; }).length;
+    var pc = primaryContact();
+    var upcomingFollowUp = leads.filter(function (l) { return l.next_follow_up_at && new Date(l.next_follow_up_at) >= new Date(); })
+      .sort(function (a, b) { return new Date(a.next_follow_up_at) - new Date(b.next_follow_up_at); })[0];
+    var lastContact = leads.filter(function (l) { return l.last_contact_at; })
+      .sort(function (a, b) { return new Date(b.last_contact_at) - new Date(a.last_contact_at); })[0];
+
+    head.innerHTML =
+      '<div class="crm-flex-between">' +
+      "<div><h2 style=\"font-size:20px\">" + CRM.escape(company.name) + "</h2>" +
+      '<div class="crm-muted" style="margin-top:4px">' + CRM.escape([company.industry, company.city, company.country].filter(Boolean).join(" · ") || "بدون تفاصيل") + "</div></div>" +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">' +
+      '<span class="crm-badge crm-badge-' + (OUTREACH_BADGE[outreachLegacy] || "mute") + '">' + (OUTREACH_LABELS[outreachLegacy] || outreachLegacy) + "</span>" +
+      (canWrite ? '<button class="crm-btn crm-btn-sm" id="crmEditCompanyBtn">تحديث الحالة</button>' : "") +
+      "</div></div>" +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px">' + renderContactButtons() + "</div>" +
+      '<div class="crm-form-grid" style="margin-top:16px;font-size:13.5px">' +
+      infoItem("جهة الاتصال الأساسية", pc ? pc.full_name : "—") +
+      infoItem("العملاء المحتملون المفتوحون", String(openLeadsCount)) +
+      infoItem("آخر نشاط", lastContact ? CRM.formatDate(lastContact.last_contact_at) : "—") +
+      infoItem("المتابعة القادمة", upcomingFollowUp ? CRM.formatDate(upcomingFollowUp.next_follow_up_at) : "—") +
+      infoItem("مسؤول المبيعات", memberName(company.assigned_to)) +
+      "</div>" +
+      (hasOutreachColumns ? "" : '<div class="crm-alert crm-alert-warning" style="margin-top:14px">شغّل ملف CRM-SALES-OPS-UPGRADE.sql في Supabase لتفعيل حقل حالة التواصل ومسؤول المبيعات.</div>') +
+      '<div class="crm-section-title" style="margin-top:22px"><h2>بيانات الشركة</h2></div>' +
+      renderCompanyForm();
+
+    document.getElementById("cbWebsite").addEventListener("click", openWebsiteLink);
+    document.getElementById("cbLinkedin").addEventListener("click", openLinkedinLink);
+    // Bug fix (v1.6.1): this header button used to fire mailto: directly,
+    // bypassing the Unified Communication Composer entirely (no template,
+    // no server-side Resend send, no Timeline/Email History logging, no
+    // Outreach status update). It now opens the same composer as the
+    // Communication section's "إرسال بريد" quick action below.
+    document.getElementById("cbEmail").addEventListener("click", function () { openComposerFor("email"); });
+    document.getElementById("cbCopyEmail").addEventListener("click", function () { copyToClipboard(company.email || (pc || {}).email, "تم نسخ البريد الإلكتروني."); });
+    document.getElementById("cbCall").addEventListener("click", callNumber);
+    if (canWrite) document.getElementById("crmCompanyForm").addEventListener("submit", saveCompanyInfo);
+
+    if (canWrite && hasOutreachColumns) {
+      var editBtn = document.getElementById("crmEditCompanyBtn");
+      if (editBtn) editBtn.addEventListener("click", function () {
+        q("edOutreach").value = company.outreach_status || "not_contacted";
+        q("edAssigned").value = company.assigned_to || "";
+        q("edNotes").value = "";
+        openOverlay("crmEditModalOverlay");
+      });
+    }
+
+    var actions = document.getElementById("crmQuickActions");
+    if (canWrite) {
+      // Note: Send Email / WhatsApp / LinkedIn / Call / Add Note / Schedule
+      // Follow-up now live in the dedicated "التواصل" (Communication)
+      // section below (v1.6 Unified Outreach Automation) instead of here,
+      // so there is exactly one place that starts each kind of outreach —
+      // this bar keeps only the actions that aren't part of that channel
+      // model (Task / Meeting / Proposal / Convert to Client).
+      actions.innerHTML =
+        '<button class="crm-btn crm-btn-sm" id="crmQuickTask">إضافة Task</button>' +
+        '<button class="crm-btn crm-btn-sm" id="crmQuickMeeting">إنشاء Meeting</button>' +
+        '<a class="crm-btn crm-btn-sm" href="proposals.html?company_id=' + companyId + '&new=1">إنشاء Proposal</a>' +
+        '<button class="crm-btn crm-btn-sm crm-btn-primary" id="crmQuickClient">تحويل إلى Client</button>';
+      document.getElementById("crmQuickTask").addEventListener("click", function () {
+        q("taskTitle").value = ""; q("taskDue").value = ""; q("taskDesc").value = ""; q("taskPriority").value = "medium";
+        openOverlay("crmTaskModalOverlay");
+      });
+      document.getElementById("crmQuickMeeting").addEventListener("click", function () {
+        q("mtTitle").value = ""; q("mtWhen").value = ""; q("mtLocation").value = ""; q("mtNotes").value = ""; q("mtDuration").value = 30;
+        openOverlay("crmMeetingModalOverlay");
+      });
+      document.getElementById("crmQuickClient").addEventListener("click", convertToClient);
+    } else {
+      actions.innerHTML = '<p class="crm-muted" style="font-size:12.5px">وضع القراءة فقط — لا تملك صلاحية إضافة نشاطات.</p>';
+    }
+  }
+
+  async function logActivity(type, subject, details) {
+    var res = await db.from("crm_activities").insert({
+      company_id: companyId,
+      contact_id: (primaryContact() || {}).id || null,
+      activity_type: type, subject: subject, details: details || null
+    }).select().single();
+    if (res.error) throw res.error;
+    return res.data;
+  }
+
+  // Note: the old free-text "log a call/email/whatsapp" flow (and its
+  // resolveWhatsappNumber()/notifyWhatsappLogged() helpers) has been
+  // replaced by the Unified Communication Composer (crm-composer.js) and
+  // the structured Call Outcome flow below — see the "التواصل"
+  // (Communication) section. The 'whatsapp_logged' notification is now
+  // raised by the composer itself (see crm-composer.js), so it still fires
+  // from every page that uses the composer, not just this one.
+
+  // ======================================================================
+  // 2) Contacts section — dedicated CRUD panel (add/edit/delete/set primary)
+  // ======================================================================
+  function openContactModal(row) {
+    document.getElementById("crmContactModalTitle").textContent = row ? "تعديل جهة اتصال" : "جهة اتصال جديدة";
+    q("ctId").value = row ? row.id : "";
+    q("ctName").value = row ? row.full_name : "";
+    q("ctJob").value = (row && row.job_title) || "";
+    q("ctEmail").value = (row && row.email) || "";
+    q("ctPhone").value = (row && row.phone) || "";
+    q("ctWhatsapp").value = (row && row.whatsapp) || "";
+    q("ctLinkedin").value = (row && row.linkedin_url) || "";
+    q("ctPrimary").checked = !!(row && row.is_primary);
+    q("ctDecisionMaker").checked = !!(row && row.is_decision_maker);
+    q("ctNotes").value = (row && row.notes) || "";
+    openOverlay("crmContactModalOverlay");
+  }
+
+  async function saveContact(e) {
+    e.preventDefault();
+    var id = q("ctId").value;
+    var payload = {
+      company_id: companyId,
+      full_name: q("ctName").value.trim(),
+      job_title: q("ctJob").value.trim() || null,
+      email: q("ctEmail").value.trim() || null,
+      phone: q("ctPhone").value.trim() || null,
+      whatsapp: q("ctWhatsapp").value.trim() || null,
+      linkedin_url: q("ctLinkedin").value.trim() || null,
+      is_primary: q("ctPrimary").checked,
+      notes: q("ctNotes").value.trim() || null
+    };
+    if (hasDecisionMakerColumn) payload.is_decision_maker = q("ctDecisionMaker").checked;
+    if (!payload.full_name) { CRM.toast("الاسم الكامل مطلوب.", "danger"); return; }
+    try {
+      var newId = id;
+      if (id) {
+        var res = await db.from("crm_contacts").update(payload).eq("id", id);
+        if (res.error) throw res.error;
+      } else {
+        var res2 = await db.from("crm_contacts").insert(payload).select().single();
+        if (res2.error) throw res2.error;
+        newId = res2.data.id;
+      }
+      // Enforce "exactly one primary contact per company" atomically,
+      // server-side, instead of duplicating that invariant in client code.
+      if (payload.is_primary) {
+        try {
+          var primaryRes = await db.rpc("crm_set_primary_contact", { p_contact_id: newId });
+          if (primaryRes.error) throw primaryRes.error;
+        } catch (e2) { console.warn("crm_set_primary_contact failed (contact itself already saved):", e2); }
+      }
+      closeOverlay("crmContactModalOverlay");
+      CRM.toast(id ? "تم التحديث." : "تمت الإضافة.", "info");
+      await reloadCompany();
+      await computeAndRenderKpis();
+      await renderTabs();
+    } catch (err) {
+      if (/is_decision_maker/.test(err.message || "")) {
+        hasDecisionMakerColumn = false;
+        delete payload.is_decision_maker;
+        try {
+          var res3 = id ? await db.from("crm_contacts").update(payload).eq("id", id) : await db.from("crm_contacts").insert(payload);
+          if (res3.error) throw res3.error;
+          closeOverlay("crmContactModalOverlay");
+          CRM.toast((id ? "تم التحديث" : "تمت الإضافة") + " (شغّل CRM-COMPANY-360.sql لتفعيل حقل صاحب القرار).", "warning");
+          await reloadCompany(); await computeAndRenderKpis(); await renderTabs();
+          return;
+        } catch (err2) { CRM.toast("تعذّر الحفظ: " + (err2.message || ""), "danger"); }
+      } else {
+        CRM.toast("تعذّر الحفظ: " + (err.message || ""), "danger");
+      }
+    }
+  }
+
+  async function deleteContact(id) {
+    if (!CRM.confirm("حذف جهة الاتصال هذه نهائيًا؟")) return;
+    try {
+      var res = await db.from("crm_contacts").delete().eq("id", id);
+      if (res.error) throw res.error;
+      CRM.toast("تم الحذف.", "info");
+      await reloadCompany();
+      await computeAndRenderKpis();
+    } catch (err) { CRM.toast("تعذّر الحذف: " + (err.message || ""), "danger"); }
+  }
+
+  async function setPrimaryContact(id) {
+    try {
+      var res = await db.rpc("crm_set_primary_contact", { p_contact_id: id });
+      if (res.error) throw res.error;
+      CRM.toast("تم تعيين جهة الاتصال الأساسية.", "info");
+      await reloadCompany();
+    } catch (err) { CRM.toast("تعذّر التعيين: " + (err.message || ""), "danger"); }
+  }
+
+  function renderContactsSection() {
+    var wrap = document.getElementById("crmContactsWrap");
+    var canWrite = who.can_write;
+    var rowsHtml = !contacts.length
+      ? '<div class="crm-empty"><p>لا توجد جهات اتصال بعد.</p></div>'
+      : '<div class="crm-table-wrap"><table class="crm-table"><thead><tr><th>الاسم</th><th>المنصب</th><th>البريد</th><th>الهاتف</th><th>صاحب قرار</th><th>الإجراءات</th></tr></thead><tbody>' +
+        contacts.map(function (c) {
+          return "<tr><td>" + CRM.escape(c.full_name) + (c.is_primary ? ' <span class="crm-badge crm-badge-gold">أساسي</span>' : "") + "</td>" +
+            "<td>" + CRM.escape(c.job_title || "—") + "</td><td>" + CRM.escape(c.email || "—") + "</td><td dir=\"ltr\" style=\"text-align:end\">" + CRM.escape(c.phone || c.whatsapp || "—") + "</td>" +
+            "<td>" + (c.is_decision_maker ? '<span class="crm-badge crm-badge-success">نعم</span>' : "—") + "</td>" +
+            "<td style=\"white-space:nowrap;display:flex;gap:6px\">" +
+            (canWrite && !c.is_primary ? "<button class=\"crm-btn crm-btn-sm crm-ct-primary\" data-id=\"" + c.id + "\">تعيين أساسي</button>" : "") +
+            (canWrite ? "<button class=\"crm-btn crm-btn-sm crm-ct-edit\" data-id=\"" + c.id + "\">تعديل</button>" : "") +
+            (who.is_admin ? "<button class=\"crm-btn crm-btn-sm crm-btn-danger crm-ct-del\" data-id=\"" + c.id + "\">حذف</button>" : "") +
+            "</td></tr>";
+        }).join("") + "</tbody></table></div>";
+
+    wrap.innerHTML =
+      '<div class="crm-flex-between"><div class="crm-section-title" style="margin:0"><h2>جهات الاتصال</h2></div>' +
+      (canWrite ? '<button class="crm-btn crm-btn-sm crm-btn-primary" id="crmAddContact">+ إضافة شخص</button>' : "") + "</div>" +
+      (hasDecisionMakerColumn ? "" : '<div class="crm-alert crm-alert-warning" style="margin:10px 0">شغّل ملف CRM-COMPANY-360.sql لتفعيل حقل "صاحب قرار".</div>') +
+      '<div style="margin-top:12px">' + rowsHtml + "</div>";
+
+    if (canWrite) document.getElementById("crmAddContact").addEventListener("click", function () { openContactModal(null); });
+    wrap.querySelectorAll(".crm-ct-edit").forEach(function (b) { b.addEventListener("click", function () { openContactModal(contacts.filter(function (c) { return c.id === b.dataset.id; })[0]); }); });
+    wrap.querySelectorAll(".crm-ct-del").forEach(function (b) { b.addEventListener("click", function () { deleteContact(b.dataset.id); }); });
+    wrap.querySelectorAll(".crm-ct-primary").forEach(function (b) { b.addEventListener("click", function () { setPrimaryContact(b.dataset.id); }); });
+  }
+
+  // ======================================================================
+  // 5) Notes — one-click quick add + recent notes list
+  // ======================================================================
+  async function addQuickNote() {
+    var input = q("crmQuickNoteInput");
+    var text = (input.value || "").trim();
+    if (!text) return;
+    try {
+      await logActivity("note", text);
+      input.value = "";
+      CRM.toast("تمت إضافة الملاحظة.", "info");
+      await renderNotesSection();
+      await computeAndRenderKpis();
+      await renderTabs();
+    } catch (err) { CRM.toast("تعذّر الحفظ: " + (err.message || ""), "danger"); }
+  }
+
+  async function renderNotesSection() {
+    var wrap = document.getElementById("crmNotesWrap");
+    var canWrite = who.can_write;
+    wrap.innerHTML =
+      '<div class="crm-section-title"><h2>ملاحظات سريعة</h2></div>' +
+      (canWrite ? '<div style="display:flex;gap:8px"><input id="crmQuickNoteInput" placeholder="اكتب ملاحظة واضغط إضافة…" style="flex:1"><button class="crm-btn crm-btn-primary" id="crmQuickNoteBtn">إضافة</button></div>' : "") +
+      '<div id="crmQuickNoteList" style="margin-top:12px"><div class="crm-loading">جارٍ التحميل…</div></div>';
+    if (canWrite) {
+      document.getElementById("crmQuickNoteBtn").addEventListener("click", addQuickNote);
+      document.getElementById("crmQuickNoteInput").addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); addQuickNote(); } });
+    }
+    try {
+      var res = await db.from("crm_activities").select("*").or(relatedFilter()).eq("activity_type", "note").order("created_at", { ascending: false }).limit(20);
+      var listEl = document.getElementById("crmQuickNoteList");
+      if (!listEl) return; // page may have re-rendered already
+      var notes = res.data || [];
+      listEl.innerHTML = notes.length
+        ? notes.map(function (n) {
+            return '<div style="padding:8px 0;border-bottom:1px solid var(--crm-border)"><div class="crm-flex-between"><span>' + CRM.escape(n.subject) + '</span><span class="crm-muted" style="font-size:11px">' + CRM.formatDateTime(n.created_at) + "</span></div></div>";
+          }).join("")
+        : '<p class="crm-muted" style="font-size:13px">لا توجد ملاحظات بعد.</p>';
+    } catch (err) { /* non-fatal */ }
+  }
+
+  // ======================================================================
+  // Communication (v1.6 Unified Outreach Automation) — last contact per
+  // channel + next follow-up, the 6 unified quick actions, and the full
+  // chronological communication history from crm_outreach_messages.
+  // ======================================================================
+  function openComposerFor(channel) {
+    if (!window.Basma.Composer) { CRM.toast("تعذّر تحميل مركز التواصل.", "danger"); return; }
+    window.Basma.Composer.open({
+      db: db, company: company, contacts: contacts, channel: channel,
+      leadId: (leads[0] || {}).id || null,
+      onSent: function () { reloadCompany(); loadOutreach(); renderCommunicationHistory(); computeAndRenderKpis(); renderTabs(); }
+    });
+  }
+
+  function focusQuickNote() {
+    var wrap = document.getElementById("crmNotesWrap");
+    if (wrap) wrap.scrollIntoView({ behavior: "smooth", block: "center" });
+    var input = q("crmQuickNoteInput");
+    if (input) input.focus();
+  }
+
+  function channelIconBadge(channel) {
+    var badge = { email: "gold", whatsapp: "success", linkedin: "gold", phone: "mute" }[channel] || "mute";
+    return '<span class="crm-badge crm-badge-' + badge + '">' + (CHANNEL_LABELS_V16[channel] || channel) + "</span>";
+  }
+
+  async function renderCommunicationHistory() {
+    var listEl = document.getElementById("crmCommHistory");
+    if (!listEl) return;
+    listEl.innerHTML = '<div class="crm-loading">جارٍ التحميل…</div>';
+    try {
+      var res = await db.from("crm_outreach_messages").select("*").eq("company_id", companyId).order("created_at", { ascending: false }).limit(50);
+      if (res.error) throw res.error;
+      var rows = res.data || [];
+      if (!rows.length) { listEl.innerHTML = '<p class="crm-muted" style="font-size:13px">لا يوجد سجل تواصل بعد.</p>'; return; }
+      listEl.innerHTML = rows.map(function (m) {
+        var statusBadge = m.status === "failed" ? '<span class="crm-badge crm-badge-danger">فشل</span>' : '<span class="crm-badge crm-badge-success">تم</span>';
+        var preview = (m.subject ? m.subject + " — " : "") + (m.body || "").slice(0, 100);
+        return '<div style="padding:10px 0;border-bottom:1px solid var(--crm-border)">' +
+          '<div class="crm-flex-between">' + channelIconBadge(m.channel) + statusBadge +
+          '<span class="crm-muted" style="font-size:11px">' + CRM.formatDateTime(m.sent_at || m.created_at) + "</span></div>" +
+          '<div style="margin-top:6px;font-size:13px">' + CRM.escape(m.recipient || "") + "</div>" +
+          '<p class="crm-muted" style="margin:4px 0 0;font-size:12.5px">' + CRM.escape(preview) + (preview.length >= 100 ? "…" : "") + "</p>" +
+          (m.error_message ? '<p style="margin:4px 0 0;font-size:12px;color:var(--crm-danger)">' + CRM.escape(m.error_message) + "</p>" : "") +
+          (m.outcome ? '<p class="crm-muted" style="margin:4px 0 0;font-size:12px">النتيجة: ' + CRM.escape(CALL_OUTCOME_LABELS[m.outcome] || m.outcome) + "</p>" : "") +
+          "</div>";
+      }).join("");
+    } catch (err) {
+      // crm_outreach_messages may not exist yet if CRM-OUTREACH-AUTOMATION.sql
+      // hasn't been run — degrade quietly, this section just stays empty.
+      listEl.innerHTML = '<div class="crm-alert crm-alert-warning">شغّل ملف CRM-OUTREACH-AUTOMATION.sql لتفعيل سجل التواصل.</div>';
+    }
+  }
+
+  function renderCommunicationSection() {
+    var wrap = document.getElementById("crmCommWrap");
+    var canWrite = who.can_write;
+    var o = outreach || {};
+    wrap.innerHTML =
+      '<div class="crm-section-title"><h2>التواصل</h2></div>' +
+      '<div class="crm-form-grid" style="font-size:13px;margin-bottom:14px">' +
+      infoItem("آخر بريد إلكتروني", o.email_last_contact_at ? CRM.formatDateTime(o.email_last_contact_at) : "—") +
+      infoItem("آخر LinkedIn", o.linkedin_last_contact_at ? CRM.formatDateTime(o.linkedin_last_contact_at) : "—") +
+      infoItem("آخر واتساب", o.whatsapp_last_contact_at ? CRM.formatDateTime(o.whatsapp_last_contact_at) : "—") +
+      infoItem("آخر مكالمة", o.phone_last_contact_at ? CRM.formatDateTime(o.phone_last_contact_at) : "—") +
+      infoItem("المتابعة القادمة", o.next_follow_up_date ? CRM.formatDate(o.next_follow_up_date) : "—") +
+      "</div>" +
+      (canWrite ? '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">' +
+        '<button class="crm-btn crm-btn-sm crm-btn-primary" id="commSendEmail">إرسال بريد</button>' +
+        '<button class="crm-btn crm-btn-sm" id="commWhatsapp">واتساب</button>' +
+        '<button class="crm-btn crm-btn-sm" id="commLinkedin">LinkedIn</button>' +
+        '<button class="crm-btn crm-btn-sm" id="commCall">مكالمة هاتفية</button>' +
+        '<button class="crm-btn crm-btn-sm" id="commNote">إضافة ملاحظة</button>' +
+        '<button class="crm-btn crm-btn-sm" id="commSchedule">جدولة متابعة</button>' +
+        "</div>" : "") +
+      '<div class="crm-section-title" style="margin-top:6px"><h2 style="font-size:14px">سجل التواصل (زمنيًا)</h2></div>' +
+      '<div id="crmCommHistory"></div>';
+
+    if (canWrite) {
+      document.getElementById("commSendEmail").addEventListener("click", function () { openComposerFor("email"); });
+      document.getElementById("commWhatsapp").addEventListener("click", function () { openComposerFor("whatsapp"); });
+      document.getElementById("commLinkedin").addEventListener("click", function () { openComposerFor("linkedin"); });
+      document.getElementById("commNote").addEventListener("click", focusQuickNote);
+      document.getElementById("commCall").addEventListener("click", function () {
+        var pc = primaryContact();
+        q("crmCallNumberHint").textContent = "الرقم: " + ((pc && (pc.phone || pc.whatsapp)) || company.phone || "غير متوفر");
+        q("callOutcome").value = "no_answer"; q("callNotes").value = ""; q("callFollowUp").value = "5";
+        openOverlay("crmCallModalOverlay");
+      });
+      document.getElementById("commSchedule").addEventListener("click", function () {
+        q("fuChannel").value = "manual"; q("fuDays").value = "5"; q("fuCustomDays").value = ""; q("fuCustomWrap").style.display = "none";
+        openOverlay("crmFollowupModalOverlay");
+      });
+    }
+    renderCommunicationHistory();
+  }
+
+  // ======================================================================
+  // 8) Files — upload / list / download / delete (Supabase Storage)
+  // ======================================================================
+  function fileSizeLabel(bytes) {
+    if (!bytes) return "—";
+    if (bytes < 1024) return bytes + " B";
+    if (bytes < 1024 * 1024) return Math.round(bytes / 1024) + " KB";
+    return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+  }
+
+  async function loadFiles() {
+    try {
+      var res = await db.from("crm_company_files").select("*").eq("company_id", companyId).order("created_at", { ascending: false });
+      if (res.error) throw res.error;
+      files = res.data || [];
+      hasFilesTable = true;
+    } catch (err) {
+      files = [];
+      hasFilesTable = false;
+    }
+    renderFilesSection();
+  }
+
+  async function uploadFiles(fileList) {
+    var canWrite = who.can_write;
+    if (!canWrite || !hasFilesTable) return;
+    var list = Array.prototype.slice.call(fileList || []);
+    for (var i = 0; i < list.length; i++) {
+      var file = list[i];
+      var ext = "." + (file.name.split(".").pop() || "").toLowerCase();
+      if (ALLOWED_FILE_EXT.indexOf(ext) === -1) { CRM.toast("نوع الملف غير مسموح: " + file.name, "danger"); continue; }
+      if (file.size > MAX_FILE_BYTES) { CRM.toast("الملف أكبر من الحد المسموح (20 ميغابايت): " + file.name, "danger"); continue; }
+      var path = companyId + "/" + Date.now() + "-" + Math.random().toString(36).slice(2, 8) + "-" + file.name.replace(/[^\w.\-]+/g, "_");
+      try {
+        var up = await db.storage.from(FILES_BUCKET).upload(path, file, { upsert: false });
+        if (up.error) throw up.error;
+        var meta = await db.from("crm_company_files").insert({
+          company_id: companyId, storage_path: path, file_name: file.name, file_type: file.type || null, file_size: file.size
+        });
+        if (meta.error) throw meta.error;
+        try { await logActivity("note", "تم رفع ملف: " + file.name); } catch (e2) { /* non-fatal */ }
+        CRM.toast("تم رفع: " + file.name, "info");
+      } catch (err) {
+        if (/bucket not found|does not exist/i.test(err.message || "")) {
+          CRM.toast("مساحة تخزين الملفات غير مُفعّلة بعد — شغّل CRM-COMPANY-360.sql في Supabase.", "danger");
+          break;
+        }
+        CRM.toast("تعذّر رفع " + file.name + ": " + (err.message || ""), "danger");
+      }
+    }
+    await loadFiles();
+    await computeAndRenderKpis();
+    await renderTabs();
+  }
+
+  async function downloadFile(row) {
+    try {
+      var res = await db.storage.from(FILES_BUCKET).createSignedUrl(row.storage_path, 60);
+      if (res.error) throw res.error;
+      window.open(res.data.signedUrl, "_blank", "noopener");
+    } catch (err) { CRM.toast("تعذّر فتح الملف: " + (err.message || ""), "danger"); }
+  }
+
+  async function deleteFile(row) {
+    if (!CRM.confirm("حذف الملف \"" + row.file_name + "\" نهائيًا؟")) return;
+    try {
+      var res = await db.from("crm_company_files").delete().eq("id", row.id);
+      if (res.error) throw res.error;
+      try { await db.storage.from(FILES_BUCKET).remove([row.storage_path]); }
+      catch (e2) { console.warn("Storage object removal failed (metadata already deleted):", e2); }
+      CRM.toast("تم الحذف.", "info");
+      await loadFiles();
+    } catch (err) { CRM.toast("تعذّر الحذف: " + (err.message || ""), "danger"); }
+  }
+
+  function renderFilesSection() {
+    var wrap = document.getElementById("crmFilesWrap");
+    var canWrite = who.can_write;
+    if (!hasFilesTable) {
+      wrap.innerHTML = '<div class="crm-section-title"><h2>الملفات</h2></div>' +
+        '<div class="crm-alert crm-alert-warning">شغّل ملف CRM-COMPANY-360.sql في Supabase لتفعيل رفع الملفات لهذه الشركة.</div>';
+      return;
+    }
+    var listHtml = !files.length
+      ? '<p class="crm-muted" style="font-size:13px">لا توجد ملفات بعد.</p>'
+      : '<div class="crm-table-wrap"><table class="crm-table"><thead><tr><th>الملف</th><th>الحجم</th><th>تاريخ الرفع</th><th>الإجراءات</th></tr></thead><tbody>' +
+        files.map(function (f) {
+          return "<tr><td>" + CRM.escape(f.file_name) + "</td><td>" + fileSizeLabel(f.file_size) + "</td><td>" + CRM.formatDateTime(f.created_at) + "</td>" +
+            "<td style=\"white-space:nowrap;display:flex;gap:6px\"><button class=\"crm-btn crm-btn-sm crm-file-dl\" data-id=\"" + f.id + "\">فتح</button>" +
+            (who.is_admin ? "<button class=\"crm-btn crm-btn-sm crm-btn-danger crm-file-del\" data-id=\"" + f.id + "\">حذف</button>" : "") + "</td></tr>";
+        }).join("") + "</tbody></table></div>";
+
+    wrap.innerHTML =
+      '<div class="crm-section-title"><h2>الملفات</h2></div>' +
+      (canWrite ? '<label class="crm-dropzone" tabindex="0" style="display:block;margin-bottom:14px"><p>اسحب ملفًا وأفلته هنا، أو اختر ملفًا (PDF / DOCX / صور) — حتى 20 ميغابايت</p><input type="file" id="crmFileInput" multiple accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.webp,.gif" style="display:none"></label>' : "") +
+      listHtml;
+
+    if (canWrite) {
+      var dz = wrap.querySelector(".crm-dropzone");
+      var input = document.getElementById("crmFileInput");
+      input.addEventListener("change", function () { uploadFiles(input.files); input.value = ""; });
+      dz.addEventListener("dragover", function (e) { e.preventDefault(); dz.classList.add("is-dragover"); });
+      dz.addEventListener("dragleave", function () { dz.classList.remove("is-dragover"); });
+      dz.addEventListener("drop", function (e) { e.preventDefault(); dz.classList.remove("is-dragover"); uploadFiles(e.dataTransfer.files); });
+    }
+    wrap.querySelectorAll(".crm-file-dl").forEach(function (b) { b.addEventListener("click", function () { downloadFile(files.filter(function (f) { return f.id === b.dataset.id; })[0]); }); });
+    wrap.querySelectorAll(".crm-file-del").forEach(function (b) { b.addEventListener("click", function () { deleteFile(files.filter(function (f) { return f.id === b.dataset.id; })[0]); }); });
+  }
+
+  // ======================================================================
+  // 9) KPIs
+  // ======================================================================
+  async function computeAndRenderKpis() {
+    var el = document.getElementById("crmKpis");
+    if (!el) return;
+    var messagesCount = 0, meetingsCount = 0, proposalsCount = 0;
+    try {
+      var filter = relatedFilter();
+      var results = await Promise.all([
+        db.from("crm_activities").select("id", { count: "exact", head: true }).or(filter).in("activity_type", ["email", "whatsapp", "linkedin"]),
+        db.from("crm_meetings").select("id", { count: "exact", head: true }).or(filter),
+        db.from("crm_proposals").select("id", { count: "exact", head: true }).or(filter)
+      ]);
+      messagesCount = results[0].count || 0;
+      meetingsCount = results[1].count || 0;
+      proposalsCount = results[2].count || 0;
+    } catch (err) { /* non-fatal — KPIs degrade to 0 rather than breaking the page */ }
+
+    var lastFollowUp = "—";
+    if (outreach) {
+      var stamps = [outreach.email_last_contact_at, outreach.linkedin_last_contact_at, outreach.whatsapp_last_contact_at, outreach.phone_last_contact_at].filter(Boolean).map(function (d) { return new Date(d); });
+      if (stamps.length) lastFollowUp = CRM.formatDate(new Date(Math.max.apply(null, stamps)));
+    }
+    var clientStatus = outreach ? (outreach.is_client ? "عميل" : "محتمل") : "—";
+
+    el.innerHTML =
+      '<div class="crm-kpi"><span>عدد الأشخاص</span><strong>' + contacts.length + "</strong></div>" +
+      '<div class="crm-kpi"><span>عدد الرسائل</span><strong>' + messagesCount + "</strong></div>" +
+      '<div class="crm-kpi"><span>آخر متابعة</span><strong style="font-size:16px">' + lastFollowUp + "</strong></div>" +
+      '<div class="crm-kpi"><span>عدد الاجتماعات</span><strong>' + meetingsCount + "</strong></div>" +
+      '<div class="crm-kpi"><span>عدد عروض الأسعار</span><strong>' + proposalsCount + "</strong></div>" +
+      '<div class="crm-kpi"><span>حالة العميل</span><strong style="font-size:16px">' + clientStatus + "</strong></div>";
+  }
+
+  // ---- Tabs ----
+  var TABS = [
+    { key: "timeline", label: "الجدول الزمني" },
+    { key: "leads", label: "العملاء المحتملون" },
+    { key: "tasks", label: "المهام" },
+    { key: "meetings", label: "الاجتماعات" },
+    { key: "proposals", label: "عروض الأسعار" },
+    { key: "activity", label: "سجل النشاطات" }
+  ];
+  function emptyTab(msg) { return '<div class="crm-empty"><p>' + msg + "</p></div>"; }
+
+  function activityKind(type) { return type === "note" ? "mute" : "gold"; }
+  function proposalKind(status) {
+    if (status === "accepted") return "success";
+    if (status === "rejected" || status === "expired") return "danger";
+    return "gold";
+  }
+  function timelineItemHtml(e) {
+    return '<div class="crm-timeline-item">' +
+      '<div class="crm-timeline-dot crm-badge-' + e.kind + '"></div>' +
+      '<div class="crm-timeline-body"><div class="crm-flex-between"><strong>' + CRM.escape(e.title) + '</strong><span class="crm-muted" style="font-size:11px">' + CRM.formatDateTime(e.ts) + '</span></div>' +
+      (e.desc ? '<p class="crm-muted" style="margin:4px 0 0;font-size:13px">' + CRM.escape(e.desc) + "</p>" : "") +
+      "</div></div>";
+  }
+
+  // Read-time MERGE of everything tied to this company — directly (company_id)
+  // or through one of its Leads (lead_id) — plus a synthetic "company added"
+  // and one "Lead created" entry per lead. No new storage, nothing duplicated.
+  async function loadTimelineData() {
+    var events = [];
+    events.push({ ts: company.created_at, title: "تمت إضافة الشركة", desc: company.name, kind: "gold" });
+    leads.forEach(function (l) {
+      events.push({ ts: l.created_at, title: "Lead جديد: " + l.title, desc: "المرحلة: " + (STAGE_LABELS[l.stage] || l.stage), kind: "gold" });
+    });
+
+    var filter = relatedFilter();
+    var TIMELINE_CAP = 200;
+    var results = await Promise.all([
+      db.from("crm_activities").select("*").or(filter).order("created_at", { ascending: false }).limit(TIMELINE_CAP),
+      db.from("crm_tasks").select("*").or(filter).order("created_at", { ascending: false }).limit(TIMELINE_CAP),
+      db.from("crm_meetings").select("*").or(filter).order("created_at", { ascending: false }).limit(TIMELINE_CAP),
+      db.from("crm_proposals").select("*").or(filter).order("created_at", { ascending: false }).limit(TIMELINE_CAP)
+    ]);
+    var acts = results[0].data || [], tasksData = results[1].data || [], meetingsData = results[2].data || [], proposalsData = results[3].data || [];
+
+    acts.forEach(function (a) {
+      events.push({ ts: a.activity_at || a.created_at, title: ACTIVITY_LABELS[a.activity_type] || a.activity_type, desc: a.subject + (a.details ? " — " + a.details : ""), kind: activityKind(a.activity_type) });
+    });
+    tasksData.forEach(function (t) {
+      events.push({ ts: t.created_at, title: "مهمة جديدة: " + t.title, desc: "الأولوية: " + (PRIORITY_LABELS[t.priority] || t.priority), kind: "gold" });
+      if (t.completed_at) events.push({ ts: t.completed_at, title: "اكتملت المهمة: " + t.title, desc: "", kind: "success" });
+    });
+    meetingsData.forEach(function (m) {
+      events.push({ ts: m.created_at, title: "اجتماع مجدول: " + m.title, desc: CRM.formatDateTime(m.scheduled_at), kind: "gold" });
+      if (m.status === "completed") events.push({ ts: m.updated_at, title: "انتهى الاجتماع: " + m.title, desc: "", kind: "success" });
+    });
+    proposalsData.forEach(function (p) {
+      events.push({ ts: p.created_at, title: "عرض سعر جديد: " + p.proposal_number, desc: p.title + " · " + CRM.formatMoney(p.total, p.currency), kind: "gold" });
+      if (p.status !== "draft") {
+        events.push({ ts: p.updated_at, title: "الحالة الحالية للعرض: " + (PROPOSAL_STATUS_LABELS[p.status] || p.status), desc: p.proposal_number, kind: proposalKind(p.status) });
+      }
+    });
+
+    events = events.filter(function (e) { return e.ts; }).sort(function (a, b) {
+      return timelineSort === "desc" ? new Date(b.ts) - new Date(a.ts) : new Date(a.ts) - new Date(b.ts);
+    });
+    if (!events.length) return emptyTab("لا توجد أحداث بعد.");
+    return '<div style="display:flex;justify-content:flex-end;margin-bottom:12px">' +
+      '<button class="crm-btn crm-btn-sm" id="crmTimelineSort">' + (timelineSort === "desc" ? "الأقدم أولاً" : "الأحدث أولاً") + "</button></div>" +
+      '<div class="crm-timeline">' + events.map(timelineItemHtml).join("") + "</div>";
+  }
+  async function renderTimelinePanel(panelEl) {
+    panelEl.innerHTML = await loadTimelineData();
+    var sortBtn = panelEl.querySelector("#crmTimelineSort");
+    if (sortBtn) sortBtn.addEventListener("click", async function () {
+      timelineSort = timelineSort === "desc" ? "asc" : "desc";
+      await renderTimelinePanel(panelEl);
+    });
+  }
+
+  async function loadTabData(key) {
+    var TAB_CAP = 200;
+    if (key === "leads") {
+      if (!leads.length) return emptyTab("لا يوجد عملاء محتملون مرتبطون بهذه الشركة.");
+      return '<div class="crm-table-wrap"><table class="crm-table"><thead><tr><th>العنوان</th><th>المرحلة</th><th>القيمة</th><th>تاريخ الإنشاء</th></tr></thead><tbody>' +
+        leads.map(function (l) {
+          return "<tr><td><a href=\"lead-details.html?id=" + l.id + "\" style=\"color:var(--crm-gold)\">" + CRM.escape(l.title) + "</a></td>" +
+            "<td><span class=\"crm-badge crm-badge-gold\">" + (STAGE_LABELS[l.stage] || l.stage) + "</span></td>" +
+            "<td>" + CRM.formatMoney(l.estimated_value, l.currency) + "</td><td>" + CRM.formatDate(l.created_at) + "</td></tr>";
+        }).join("") + "</tbody></table></div>";
+    }
+    if (key === "tasks") {
+      var rt = await db.from("crm_tasks").select("*").or(relatedFilter()).order("due_at", { ascending: true, nullsFirst: false }).limit(TAB_CAP);
+      if (!rt.data || !rt.data.length) return emptyTab("لا توجد مهام مرتبطة بهذه الشركة.");
+      return '<div class="crm-table-wrap"><table class="crm-table"><thead><tr><th>العنوان</th><th>الأولوية</th><th>الاستحقاق</th><th>الحالة</th></tr></thead><tbody>' +
+        rt.data.map(function (t) {
+          var overdue = t.due_at && new Date(t.due_at) < new Date() && t.status !== "completed" && t.status !== "cancelled";
+          return "<tr><td>" + CRM.escape(t.title) + "</td><td>" + CRM.escape(PRIORITY_LABELS[t.priority] || t.priority) + "</td><td>" + (overdue ? '<span class="crm-badge crm-badge-danger">متأخرة</span> ' : "") + CRM.formatDate(t.due_at) + "</td><td>" + CRM.escape(TASK_STATUS_LABELS[t.status] || t.status) + "</td></tr>";
+        }).join("") + "</tbody></table></div>";
+    }
+    if (key === "meetings") {
+      var rm = await db.from("crm_meetings").select("*").or(relatedFilter()).order("scheduled_at", { ascending: false }).limit(TAB_CAP);
+      if (!rm.data || !rm.data.length) return emptyTab("لا توجد اجتماعات مرتبطة بهذه الشركة.");
+      return '<div class="crm-table-wrap"><table class="crm-table"><thead><tr><th>العنوان</th><th>النوع</th><th>الموعد</th><th>الحالة</th></tr></thead><tbody>' +
+        rm.data.map(function (m) {
+          return "<tr><td>" + CRM.escape(m.title) + "</td><td>" + CRM.escape(MEETING_TYPE_LABELS[m.meeting_type] || m.meeting_type || "—") + "</td><td>" + CRM.formatDateTime(m.scheduled_at) + "</td><td>" + CRM.escape(MEETING_STATUS_LABELS[m.status] || m.status) + "</td></tr>";
+        }).join("") + "</tbody></table></div>";
+    }
+    if (key === "proposals") {
+      var rp = await db.from("crm_proposals").select("*").or(relatedFilter()).order("created_at", { ascending: false }).limit(TAB_CAP);
+      if (!rp.data || !rp.data.length) return emptyTab("لا توجد عروض أسعار لهذه الشركة.");
+      return '<div class="crm-table-wrap"><table class="crm-table"><thead><tr><th>الرقم</th><th>العنوان</th><th>الحالة</th><th>الإجمالي</th></tr></thead><tbody>' +
+        rp.data.map(function (p) {
+          return "<tr><td><a href=\"proposal-print.html?id=" + p.id + "\" style=\"color:var(--crm-gold)\">" + CRM.escape(p.proposal_number) + "</a></td><td>" + CRM.escape(p.title) + "</td><td>" + CRM.escape(PROPOSAL_STATUS_LABELS[p.status] || p.status) + "</td><td>" + CRM.formatMoney(p.total, p.currency) + "</td></tr>";
+        }).join("") + "</tbody></table></div>";
+    }
+    if (key === "activity") {
+      var ra = await db.from("crm_activities").select("*").or(relatedFilter()).order("created_at", { ascending: false }).limit(TAB_CAP);
+      return (ra.data || []).map(function (a) {
+        return '<div class="crm-card" style="padding:12px 14px"><div class="crm-flex-between"><span class="crm-badge crm-badge-gold">' + (ACTIVITY_LABELS[a.activity_type] || a.activity_type) + "</span><span class=\"crm-muted\" style=\"font-size:11.5px\">" + CRM.formatDateTime(a.activity_at || a.created_at) + "</span></div>" +
+          "<strong style=\"display:block;margin-top:6px;color:#fbf7f0\">" + CRM.escape(a.subject) + "</strong>" +
+          (a.details ? '<p class="crm-muted" style="margin:4px 0 0;font-size:13px">' + CRM.escape(a.details) + "</p>" : "") + "</div>";
+      }).join("") || emptyTab("لا توجد نشاطات مسجّلة بعد.");
+    }
+    return "";
+  }
+
+  async function renderTabs() {
+    var container = document.getElementById("crmTabsSection");
+    container.innerHTML =
+      '<div class="crm-tabs" id="crmTabButtons">' + TABS.map(function (t, i) { return '<button data-key="' + t.key + '" class="' + (i === 0 ? "is-active" : "") + '">' + t.label + "</button>"; }).join("") + "</div>" +
+      TABS.map(function (t, i) { return '<div class="crm-tab-panel' + (i === 0 ? " is-active" : "") + '" data-panel="' + t.key + '"><div class="crm-loading">جارٍ التحميل…</div></div>'; }).join("");
+
+    var buttons = container.querySelectorAll("#crmTabButtons button");
+    buttons.forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        buttons.forEach(function (b) { b.classList.remove("is-active"); });
+        btn.classList.add("is-active");
+        container.querySelectorAll(".crm-tab-panel").forEach(function (p) { p.classList.toggle("is-active", p.dataset.panel === btn.dataset.key); });
+      });
+    });
+
+    for (var i = 0; i < TABS.length; i++) {
+      var key = TABS[i].key;
+      var panel = container.querySelector('[data-panel="' + key + '"]');
+      if (key === "timeline") { await renderTimelinePanel(panel); continue; }
+      var html = await loadTabData(key);
+      panel.innerHTML = html;
+    }
+  }
+
+  function wireForms() {
+    document.getElementById("crmTaskForm").addEventListener("submit", async function (e) {
+      e.preventDefault();
+      try {
+        var res = await db.from("crm_tasks").insert({
+          company_id: companyId, title: q("taskTitle").value.trim(), priority: q("taskPriority").value,
+          due_at: q("taskDue").value || null, description: q("taskDesc").value.trim() || null
+        });
+        if (res.error) throw res.error;
+        closeOverlay("crmTaskModalOverlay");
+        CRM.toast("تم إنشاء المهمة.", "info");
+        await renderTabs();
+      } catch (err) { CRM.toast("تعذّر الحفظ: " + (err.message || ""), "danger"); }
+    });
+
+    document.getElementById("crmMeetingForm").addEventListener("submit", async function (e) {
+      e.preventDefault();
+      if (!q("mtWhen").value) { CRM.toast("حدّد موعد الاجتماع.", "danger"); return; }
+      try {
+        var pc = primaryContact();
+        var res = await db.from("crm_meetings").insert({
+          company_id: companyId, contact_id: pc ? pc.id : null, title: q("mtTitle").value.trim(), meeting_type: q("mtType").value,
+          scheduled_at: new Date(q("mtWhen").value).toISOString(), duration_minutes: Number(q("mtDuration").value || 30),
+          location_or_link: q("mtLocation").value.trim() || null, notes: q("mtNotes").value.trim() || null
+        });
+        if (res.error) throw res.error;
+        await logActivity("meeting", "تمت جدولة اجتماع: " + q("mtTitle").value.trim());
+        closeOverlay("crmMeetingModalOverlay");
+        CRM.toast("تم جدولة الاجتماع.", "info");
+        await renderTabs();
+        await computeAndRenderKpis();
+      } catch (err) { CRM.toast("تعذّر الحفظ: " + (err.message || ""), "danger"); }
+    });
+
+    document.getElementById("crmEditForm").addEventListener("submit", async function (e) {
+      e.preventDefault();
+      try {
+        var previousOutreach = company ? (company.outreach_status || "not_contacted") : null;
+        var newOutreach = q("edOutreach").value;
+        var payload = { outreach_status: newOutreach, assigned_to: q("edAssigned").value || null };
+        var res = await db.from("crm_companies").update(payload).eq("id", companyId);
+        if (res.error) throw res.error;
+        if (previousOutreach && previousOutreach !== newOutreach) {
+          await logActivity("status_change", "تغيير حالة التواصل إلى: " + (OUTREACH_LABELS[newOutreach] || newOutreach));
+        }
+        var newNote = q("edNotes").value.trim();
+        if (newNote) { await logActivity("note", "ملاحظة", newNote); q("edNotes").value = ""; }
+        closeOverlay("crmEditModalOverlay");
+        CRM.toast("تم التحديث.", "info");
+        await reloadCompany(); await renderTabs();
+      } catch (err) { CRM.toast("تعذّر الحفظ: " + (err.message || ""), "danger"); }
+    });
+
+    document.getElementById("crmContactForm").addEventListener("submit", saveContact);
+
+    document.getElementById("crmCallNowBtn").addEventListener("click", callNumber); // reuses the existing tel: helper (section 1's "زر الاتصال")
+
+    document.getElementById("crmCallForm").addEventListener("submit", async function (e) {
+      e.preventDefault();
+      var outcome = q("callOutcome").value;
+      var notes = q("callNotes").value.trim();
+      var days = q("callFollowUp").value ? Number(q("callFollowUp").value) : null;
+      var btn = e.target.querySelector("button[type=submit]"); btn.disabled = true;
+      try {
+        var pc = primaryContact();
+        var msg = await db.from("crm_outreach_messages").insert({
+          company_id: companyId, contact_id: pc ? pc.id : null, lead_id: (leads[0] || {}).id || null,
+          channel: "phone", status: "completed", outcome: outcome, body: notes || null
+        }).select().single();
+        if (msg.error) throw msg.error;
+
+        var phoneStatus = outcome === "call_back" ? "follow_up_required" : "called";
+        var outreachRes = await db.from("crm_outreach").update({ phone_status: phoneStatus }).eq("company_id", companyId);
+        if (outreachRes.error) console.warn("crm_outreach phone_status update failed:", outreachRes.error.message);
+
+        await logActivity("call", "مكالمة هاتفية: " + (CALL_OUTCOME_LABELS[outcome] || outcome), notes || null);
+
+        if (outcome === "meeting_requested") {
+          try { await db.rpc("crm_set_response_status", { p_company_id: companyId, p_status: "meeting_requested" }); }
+          catch (e2) { console.warn("crm_set_response_status failed:", e2); }
+        }
+        if (days) {
+          try { await db.rpc("crm_schedule_followup", { p_company_id: companyId, p_message_id: msg.data.id, p_days: days, p_channel: "phone" }); }
+          catch (e3) { console.warn("crm_schedule_followup failed:", e3); }
+        }
+
+        closeOverlay("crmCallModalOverlay");
+        CRM.toast("تم حفظ نتيجة المكالمة.", "info");
+        await loadOutreach();
+        await computeAndRenderKpis();
+        await renderTabs();
+
+        if (outcome === "meeting_requested" && CRM.confirm("تم تسجيل طلب اجتماع. هل تريد إنشاء الاجتماع الآن؟")) {
+          q("mtTitle").value = ""; q("mtWhen").value = ""; q("mtLocation").value = ""; q("mtNotes").value = ""; q("mtDuration").value = 30;
+          openOverlay("crmMeetingModalOverlay");
+        }
+      } catch (err) { CRM.toast("تعذّر الحفظ: " + (err.message || ""), "danger"); }
+      finally { btn.disabled = false; }
+    });
+
+    q("fuDays").addEventListener("change", function () { q("fuCustomWrap").style.display = this.value === "custom" ? "block" : "none"; });
+    q("fuCustomWrap").style.display = "none";
+
+    document.getElementById("crmFollowupForm").addEventListener("submit", async function (e) {
+      e.preventDefault();
+      var days = q("fuDays").value === "custom" ? Number(q("fuCustomDays").value) : Number(q("fuDays").value);
+      if (!(days > 0)) { CRM.toast("أدخل عدد أيام صحيحًا.", "danger"); return; }
+      var channel = q("fuChannel").value;
+      var btn = e.target.querySelector("button[type=submit]"); btn.disabled = true;
+      try {
+        var res = await db.rpc("crm_schedule_followup", { p_company_id: companyId, p_message_id: null, p_days: days, p_channel: channel });
+        if (res.error) throw res.error;
+        closeOverlay("crmFollowupModalOverlay");
+        CRM.toast("تم جدولة المتابعة.", "info");
+        await loadOutreach();
+        await renderTabs();
+      } catch (err) { CRM.toast("تعذّر الجدولة: " + (err.message || ""), "danger"); }
+      finally { btn.disabled = false; }
+    });
+  }
+
+  async function boot() {
+    if (!companyId) { document.body.innerHTML = '<div class="crm-alert crm-alert-danger" style="margin:30px">لم يتم تحديد شركة.</div>'; return; }
+    var ctx = await CRM.boot({ activeKey: "companies", title: "تفاصيل الشركة", sub: "" });
+    if (!ctx) return;
+    db = ctx.client; who = ctx.who;
+    document.getElementById("crmApp").innerHTML =
+      '<div class="crm-kpi-grid" id="crmKpis" style="margin-bottom:16px"></div>' +
+      '<div class="crm-card" id="crmCompanyHead"><div class="crm-loading">جارٍ التحميل…</div></div>' +
+      '<div class="crm-card" id="crmQuickActionsWrap"><div class="crm-section-title"><h2>إجراءات سريعة</h2></div><div style="display:flex;gap:8px;flex-wrap:wrap" id="crmQuickActions"></div></div>' +
+      '<div class="crm-card" id="crmContactsWrap"><div class="crm-loading">جارٍ التحميل…</div></div>' +
+      '<div class="crm-card" id="crmOutreachWrap"><div class="crm-loading">جارٍ التحميل…</div></div>' +
+      '<div class="crm-card" id="crmCommWrap"><div class="crm-loading">جارٍ التحميل…</div></div>' +
+      '<div class="crm-card" id="crmNotesWrap"><div class="crm-loading">جارٍ التحميل…</div></div>' +
+      '<div class="crm-card" id="crmFilesWrap"><div class="crm-loading">جارٍ التحميل…</div></div>' +
+      '<div class="crm-card" id="crmTabsSection"></div>';
+
+    document.getElementById("edOutreach").innerHTML = Object.keys(OUTREACH_LABELS).map(function (k) { return '<option value="' + k + '">' + OUTREACH_LABELS[k] + "</option>"; }).join("");
+
+    wireForms();
+    try {
+      var membersRes = await db.from("crm_members").select("user_id,full_name").eq("is_active", true);
+      members = membersRes.data || [];
+      document.getElementById("edAssigned").innerHTML = '<option value="">— غير محدد —</option>' + members.map(function (m) { return '<option value="' + m.user_id + '">' + CRM.escape(m.full_name || m.user_id.slice(0, 8)) + "</option>"; }).join("");
+    } catch (e) { /* non-fatal */ }
+
+    try {
+      await reloadCompany();
+      await loadOutreach();
+      await loadFiles();
+      await computeAndRenderKpis();
+      await renderTabs();
+    } catch (err) {
+      document.getElementById("crmApp").innerHTML = '<div class="crm-alert crm-alert-danger">تعذّر تحميل بيانات الشركة: ' + CRM.escape(err.message || "") + "</div>";
+    }
+  }
+
+  boot();
+})();
+</script>
+</body>
+</html>

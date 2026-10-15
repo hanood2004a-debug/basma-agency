@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>الشركات | Basma CRM</title>
+<link rel="icon" type="image/png" href="../assets/basma-logo-navbar.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/crm.css">
+</head>
+<body class="crm-body">
+<div class="crm-modal-overlay" id="crmModalOverlay">
+  <div class="crm-modal">
+    <h3 id="crmModalTitle">شركة جديدة</h3>
+    <form id="crmForm">
+      <input type="hidden" id="rowId">
+      <div class="crm-form-grid">
+        <div class="crm-field"><label for="fName">اسم الشركة *</label><input id="fName" required></div>
+        <div class="crm-field"><label for="fWebsite">الموقع الإلكتروني</label><input id="fWebsite" type="url" placeholder="https://"></div>
+        <div class="crm-field"><label for="fCountry">الدولة</label><input id="fCountry"></div>
+        <div class="crm-field"><label for="fCity">المدينة</label><input id="fCity"></div>
+        <div class="crm-field"><label for="fIndustry">القطاع</label><input id="fIndustry"></div>
+        <div class="crm-field"><label for="fPhone">الهاتف</label><input id="fPhone"></div>
+        <div class="crm-field"><label for="fEmail">البريد الإلكتروني</label><input id="fEmail" type="email"></div>
+        <div class="crm-field"><label for="fLinkedin">رابط LinkedIn</label><input id="fLinkedin" type="url"></div>
+        <div class="crm-field"><label for="fOutreach">حالة التواصل</label><select id="fOutreach"></select></div>
+        <div class="crm-field"><label for="fAssigned">مسؤول المبيعات</label><select id="fAssigned"><option value="">— غير محدد —</option></select></div>
+      </div>
+      <div class="crm-field" style="margin-top:12px"><label for="fAddress">العنوان</label><input id="fAddress"></div>
+      <div class="crm-field" style="margin-top:12px"><label for="fNotes">ملاحظات</label><textarea id="fNotes"></textarea></div>
+      <div class="crm-form-actions">
+        <button type="button" class="crm-btn" id="crmCancel">إلغاء</button>
+        <button type="submit" class="crm-btn crm-btn-primary" id="crmSave">حفظ</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="assets/crm-client.js"></script>
+<script>
+(function () {
+  "use strict";
+  var CRM = window.Basma.CRM;
+  var OUTREACH_LABELS = {
+    not_contacted: "لم يتم التواصل", researching: "قيد البحث", contacted: "تم التواصل", replied: "تم الرد",
+    meeting_scheduled: "اجتماع مجدول", proposal_sent: "أُرسل العرض", negotiating: "تفاوض", won: "فاز", lost: "خسر"
+  };
+  var OUTREACH_BADGE = {
+    not_contacted: "mute", researching: "gold", contacted: "gold", replied: "warning",
+    meeting_scheduled: "gold", proposal_sent: "warning", negotiating: "warning", won: "success", lost: "danger"
+  };
+  var db, who, rows = [], members = [], currentOutreach = "", currentAssigned = "";
+  var PAGE_SIZE = 25, page = 0, totalCount = 0, searchDebounce = null;
+  // Set by crm/import-companies.html's "Open Imported Companies" button via
+  // sessionStorage (see IMPORT_SESSION_STORAGE_KEY there) — a same-tab,
+  // this-session-only convenience for reviewing an import right after it
+  // finishes. Not a persistent/cross-device record of imports; deliberately
+  // not a DB feature (see that file's "Import History" roadmap note).
+  var importFilterIds = null, importFilterTotal = 0;
+
+  function memberName(id) { if (!id) return "—"; var m = members.filter(function (x) { return x.user_id === id; })[0]; return m ? (m.full_name || id.slice(0, 8)) : id.slice(0, 8); }
+
+  function openModal(row) {
+    document.getElementById("crmModalTitle").textContent = row ? "تعديل شركة" : "شركة جديدة";
+    document.getElementById("rowId").value = row ? row.id : "";
+    document.getElementById("fName").value = row ? row.name : "";
+    document.getElementById("fWebsite").value = (row && row.website) || "";
+    document.getElementById("fCountry").value = (row && row.country) || "";
+    document.getElementById("fCity").value = (row && row.city) || "";
+    document.getElementById("fIndustry").value = (row && row.industry) || "";
+    document.getElementById("fPhone").value = (row && row.phone) || "";
+    document.getElementById("fEmail").value = (row && row.email) || "";
+    document.getElementById("fLinkedin").value = (row && row.linkedin_url) || "";
+    document.getElementById("fOutreach").value = (row && row.outreach_status) || "not_contacted";
+    document.getElementById("fAssigned").value = (row && row.assigned_to) || "";
+    document.getElementById("fAddress").value = (row && row.address) || "";
+    document.getElementById("fNotes").value = (row && row.notes) || "";
+    document.getElementById("crmModalOverlay").classList.add("is-open");
+  }
+  function closeModal() { document.getElementById("crmModalOverlay").classList.remove("is-open"); }
+
+  async function save(event) {
+    event.preventDefault();
+    var id = document.getElementById("rowId").value;
+    var payload = {
+      name: document.getElementById("fName").value.trim(),
+      website: document.getElementById("fWebsite").value.trim() || null,
+      country: document.getElementById("fCountry").value.trim() || null,
+      city: document.getElementById("fCity").value.trim() || null,
+      industry: document.getElementById("fIndustry").value.trim() || null,
+      phone: document.getElementById("fPhone").value.trim() || null,
+      email: document.getElementById("fEmail").value.trim() || null,
+      linkedin_url: document.getElementById("fLinkedin").value.trim() || null,
+      outreach_status: document.getElementById("fOutreach").value || "not_contacted",
+      assigned_to: document.getElementById("fAssigned").value || null,
+      address: document.getElementById("fAddress").value.trim() || null,
+      notes: document.getElementById("fNotes").value.trim() || null
+    };
+    if (!payload.name) { CRM.toast("اسم الشركة مطلوب.", "danger"); return; }
+    var btn = document.getElementById("crmSave"); btn.disabled = true;
+    try {
+      var res = id ? await db.from("crm_companies").update(payload).eq("id", id) : await db.from("crm_companies").insert(payload);
+      if (res.error) throw res.error;
+      CRM.toast(id ? "تم التحديث." : "تمت الإضافة.", "info");
+      closeModal();
+      await load();
+    } catch (err) {
+      // outreach_status / assigned_to may not exist yet if
+      // CRM-SALES-OPS-UPGRADE.sql hasn't been run in Supabase — fall back to
+      // saving without them so the page still works pre-migration.
+      if (/outreach_status|assigned_to/.test(err.message || "")) {
+        try {
+          var fallback = Object.assign({}, payload);
+          delete fallback.outreach_status; delete fallback.assigned_to;
+          var res2 = id ? await db.from("crm_companies").update(fallback).eq("id", id) : await db.from("crm_companies").insert(fallback);
+          if (res2.error) throw res2.error;
+          CRM.toast((id ? "تم التحديث" : "تمت الإضافة") + " (شغّل CRM-SALES-OPS-UPGRADE.sql لتفعيل حقول التواصل).", "warning");
+          closeModal();
+          await load();
+          return;
+        } catch (err2) { CRM.toast("تعذّر الحفظ: " + (err2.message || ""), "danger"); }
+      } else {
+        CRM.toast("تعذّر الحفظ: " + (err.message || ""), "danger");
+      }
+    } finally { btn.disabled = false; }
+  }
+
+  async function remove(id) {
+    if (!CRM.confirm("حذف هذه الشركة نهائيًا؟")) return;
+    try {
+      var res = await db.from("crm_companies").delete().eq("id", id);
+      if (res.error) throw res.error;
+      CRM.toast("تم الحذف.", "info");
+      await load();
+    } catch (err) { CRM.toast("تعذّر الحذف (تحقق من عدم ارتباطها بسجلات أخرى): " + (err.message || ""), "danger"); }
+  }
+
+  function renderPagination() {
+    var el = document.getElementById("crmPagination");
+    if (!el) return;
+    if (!totalCount) { el.innerHTML = ""; return; }
+    var start = totalCount ? page * PAGE_SIZE + 1 : 0;
+    var end = Math.min(totalCount, (page + 1) * PAGE_SIZE);
+    var hasPrev = page > 0, hasNext = end < totalCount;
+    el.innerHTML =
+      '<div class="crm-pagination-controls">' +
+      '<button class="crm-btn crm-btn-sm" id="crmPagePrev"' + (hasPrev ? "" : " disabled") + '>السابق</button>' +
+      '<span class="crm-pagination-page">عرض ' + start + '–' + end + ' من ' + totalCount + '</span>' +
+      '<button class="crm-btn crm-btn-sm" id="crmPageNext"' + (hasNext ? "" : " disabled") + '>التالي</button>' +
+      "</div>";
+    if (hasPrev) document.getElementById("crmPagePrev").addEventListener("click", function () { page -= 1; load(); });
+    if (hasNext) document.getElementById("crmPageNext").addEventListener("click", function () { page += 1; load(); });
+  }
+
+  function render() {
+    var wrap = document.getElementById("crmTableWrap"), empty = document.getElementById("crmEmpty");
+    if (!rows.length) { wrap.style.display = "none"; empty.style.display = "block"; renderPagination(); return; }
+    wrap.style.display = "block"; empty.style.display = "none";
+    document.getElementById("crmTableBody").innerHTML = rows.map(function (r) {
+      var outreach = r.outreach_status || "not_contacted";
+      return "<tr><td><a href=\"company-details.html?id=" + r.id + "\" style=\"color:var(--crm-gold);font-weight:600\">" + CRM.escape(r.name) + "</a></td><td>" + CRM.escape([r.city, r.country].filter(Boolean).join("، ") || "—") + "</td>" +
+        "<td>" + CRM.escape(r.industry || "—") + "</td><td dir=\"ltr\" style=\"text-align:end\">" + CRM.escape(r.phone || "—") + "</td>" +
+        "<td>" + CRM.escape(r.email || "—") + "</td>" +
+        "<td><span class=\"crm-badge crm-badge-" + (OUTREACH_BADGE[outreach] || "mute") + "\">" + (OUTREACH_LABELS[outreach] || outreach) + "</span></td>" +
+        "<td>" + CRM.escape(memberName(r.assigned_to)) + "</td>" +
+        "<td style=\"white-space:nowrap;display:flex;gap:6px\">" +
+        "<a class=\"crm-btn crm-btn-sm\" href=\"company-details.html?id=" + r.id + "\">عرض</a>" +
+        (who.can_write ? "<button class=\"crm-btn crm-btn-sm crm-edit\" data-id=\"" + r.id + "\">تعديل</button>" : "") +
+        (who.is_admin ? "<button class=\"crm-btn crm-btn-sm crm-btn-danger crm-del\" data-id=\"" + r.id + "\">حذف</button>" : "") +
+        "</td></tr>";
+    }).join("");
+    document.querySelectorAll(".crm-edit").forEach(function (b) { b.addEventListener("click", function () { openModal(rows.filter(function (r) { return r.id === b.dataset.id; })[0]); }); });
+    document.querySelectorAll(".crm-del").forEach(function (b) { b.addEventListener("click", function () { remove(b.dataset.id); }); });
+    renderPagination();
+  }
+
+  function renderImportBanner() {
+    var el = document.getElementById("crmImportBanner");
+    if (!el) return;
+    if (!importFilterIds || !importFilterIds.length) { el.innerHTML = ""; return; }
+    var note = importFilterTotal > importFilterIds.length
+      ? "يعرض أول " + importFilterIds.length + " من إجمالي " + importFilterTotal + " شركة مستوردة."
+      : "يعرض " + importFilterIds.length + " شركة من آخر عملية استيراد.";
+    el.innerHTML = '<div class="crm-alert crm-alert-info">' + note +
+      ' <a href="companies.html" style="color:var(--crm-gold);text-decoration:underline">عرض كل الشركات</a></div>';
+  }
+
+  function resetAndReload() { page = 0; load(); }
+
+  async function load() {
+    var q = (document.getElementById("fSearch").value || "").trim().replace(/[,()]/g, " ").replace(/\s+/g, " ").trim();
+    try {
+      var query = db.from("crm_companies").select("*", { count: "exact" });
+      if (importFilterIds && importFilterIds.length) query = query.in("id", importFilterIds);
+      if (currentOutreach) query = query.eq("outreach_status", currentOutreach);
+      if (currentAssigned) query = query.eq("assigned_to", currentAssigned);
+      if (q) {
+        query = query.or(
+          "name.ilike.%" + q + "%,country.ilike.%" + q + "%,city.ilike.%" + q + "%,industry.ilike.%" + q + "%,email.ilike.%" + q + "%"
+        );
+      }
+      query = query.order("name", { ascending: true }).range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1);
+      var res = await query;
+      if (res.error) throw res.error;
+      rows = res.data || [];
+      totalCount = res.count || 0;
+      render();
+    } catch (err) {
+      // outreach_status / assigned_to columns may not exist yet if
+      // CRM-SALES-OPS-UPGRADE.sql hasn't been run in Supabase — retry
+      // without those filters so the page still works pre-migration.
+      if (/outreach_status|assigned_to/.test(err.message || "") && (currentOutreach || currentAssigned)) {
+        currentOutreach = ""; currentAssigned = "";
+        var fvO = document.getElementById("fvOutreach"), fvA = document.getElementById("fvAssigned");
+        if (fvO) fvO.value = ""; if (fvA) fvA.value = "";
+        CRM.toast("حقول حالة التواصل غير مُفعّلة بعد (شغّل CRM-SALES-OPS-UPGRADE.sql). تم عرض النتائج بدون هذا الفلتر.", "warning");
+        return load();
+      }
+      CRM.toast("تعذّر التحميل: " + (err.message || ""), "danger");
+    }
+  }
+
+  async function boot() {
+    var ctx = await CRM.boot({ activeKey: "companies", title: "الشركات", sub: "دليل الشركات ومساحة عمل التواصل الخارجي" });
+    if (!ctx) return;
+    db = ctx.client; who = ctx.who;
+    document.getElementById("crmTopbarActions").innerHTML = who.can_write ? '<button class="crm-btn crm-btn-primary" id="crmAdd">+ إضافة شركة</button>' : "";
+
+    if (new URLSearchParams(window.location.search).get("importFilter") === "1") {
+      try {
+        var stored = JSON.parse(sessionStorage.getItem("crmLastImportCompanyIds") || "null");
+        if (stored && Array.isArray(stored.ids) && stored.ids.length) {
+          importFilterIds = stored.ids;
+          importFilterTotal = stored.total || stored.ids.length;
+        }
+      } catch (e) { /* corrupt/unavailable storage — just show the unfiltered list */ }
+    }
+
+    document.getElementById("crmApp").innerHTML =
+      '<div id="crmImportBanner"></div>' +
+      '<div class="crm-card"><div class="crm-filters">' +
+      '<div class="crm-field" style="min-width:220px"><label>بحث</label><input id="fSearch"></div>' +
+      '<div class="crm-field"><label>حالة التواصل</label><select id="fvOutreach"><option value="">الكل</option>' + Object.keys(OUTREACH_LABELS).map(function (k) { return '<option value="' + k + '">' + OUTREACH_LABELS[k] + "</option>"; }).join("") + "</select></div>" +
+      '<div class="crm-field"><label>مسؤول المبيعات</label><select id="fvAssigned"><option value="">الكل</option></select></div>' +
+      "</div></div>" +
+      '<div class="crm-table-wrap" id="crmTableWrap"><table class="crm-table"><thead><tr><th>الاسم</th><th>الموقع</th><th>القطاع</th><th>الهاتف</th><th>البريد</th><th>حالة التواصل</th><th>المسؤول</th><th>الإجراءات</th></tr></thead><tbody id="crmTableBody"></tbody></table></div>' +
+      '<div class="crm-pagination" id="crmPagination"></div>' +
+      '<div class="crm-card crm-empty" id="crmEmpty" style="display:none"><h2 style="color:#fbf7f0">لا توجد شركات بعد</h2><p>أضف أول شركة لتبدأ.</p></div>';
+
+    document.getElementById("fOutreach").innerHTML = Object.keys(OUTREACH_LABELS).map(function (k) { return '<option value="' + k + '">' + OUTREACH_LABELS[k] + "</option>"; }).join("");
+    renderImportBanner();
+
+    if (who.can_write) document.getElementById("crmAdd").addEventListener("click", function () { openModal(null); });
+    document.getElementById("crmCancel").addEventListener("click", closeModal);
+    document.getElementById("crmForm").addEventListener("submit", save);
+    document.getElementById("fSearch").addEventListener("input", function () {
+      clearTimeout(searchDebounce);
+      searchDebounce = setTimeout(resetAndReload, 350);
+    });
+    document.getElementById("fvOutreach").addEventListener("change", function (e) { currentOutreach = e.target.value; resetAndReload(); });
+    document.getElementById("fvAssigned").addEventListener("change", function (e) { currentAssigned = e.target.value; resetAndReload(); });
+
+    try {
+      var membersRes = await db.from("crm_members").select("user_id,full_name").eq("is_active", true);
+      members = membersRes.data || [];
+      var opts = '<option value="">الكل</option>' + members.map(function (m) { return '<option value="' + m.user_id + '">' + CRM.escape(m.full_name || m.user_id.slice(0, 8)) + "</option>"; }).join("");
+      document.getElementById("fvAssigned").innerHTML = opts;
+      document.getElementById("fAssigned").innerHTML = '<option value="">— غير محدد —</option>' + members.map(function (m) { return '<option value="' + m.user_id + '">' + CRM.escape(m.full_name || m.user_id.slice(0, 8)) + "</option>"; }).join("");
+    } catch (e) { /* non-fatal */ }
+
+    await load();
+  }
+
+  boot();
+})();
+</script>
+</body>
+</html>

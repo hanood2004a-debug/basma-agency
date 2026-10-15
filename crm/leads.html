@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>العملاء المحتملون | Basma CRM</title>
+<link rel="icon" type="image/png" href="../assets/basma-logo-navbar.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/crm.css">
+</head>
+<body class="crm-body">
+<div class="crm-modal-overlay" id="crmLeadModalOverlay">
+  <div class="crm-modal">
+    <h3 id="crmLeadModalTitle">Lead جديد</h3>
+    <form id="crmLeadForm">
+      <input type="hidden" id="leadId">
+      <div class="crm-form-grid">
+        <div class="crm-field"><label for="leadTitle">عنوان الفرصة *</label><input id="leadTitle" required></div>
+        <div class="crm-field"><label for="leadCompany">الشركة</label><select id="leadCompany"><option value="">— بدون شركة —</option></select></div>
+        <div class="crm-field"><label for="leadContact">الشخص</label><select id="leadContact"><option value="">— بدون شخص —</option></select></div>
+        <div class="crm-field"><label for="leadService">الخدمة</label><input id="leadService"></div>
+        <div class="crm-field"><label for="leadCountry">الدولة</label><input id="leadCountry"></div>
+        <div class="crm-field"><label for="leadSource">المصدر</label><input id="leadSource"></div>
+        <div class="crm-field"><label for="leadValue">القيمة المتوقعة</label><input id="leadValue" type="number" min="0" step="0.01" value="0"></div>
+        <div class="crm-field"><label for="leadCurrency">العملة</label><input id="leadCurrency" value="USD"></div>
+        <div class="crm-field"><label for="leadPriority">الأولوية</label>
+          <select id="leadPriority"><option value="low">منخفضة</option><option value="medium" selected>متوسطة</option><option value="high">عالية</option><option value="urgent">عاجلة</option></select>
+        </div>
+        <div class="crm-field"><label for="leadStage">المرحلة</label>
+          <select id="leadStage">
+            <option value="new">جديد</option><option value="contacted">تم التواصل</option><option value="qualified">مؤهل</option>
+            <option value="meeting_scheduled">اجتماع مجدول</option><option value="proposal_sent">أرسل العرض</option>
+            <option value="negotiation">تفاوض</option><option value="won">فاز</option><option value="lost">خسر</option>
+          </select>
+        </div>
+        <div class="crm-field"><label for="leadFollowUp">المتابعة القادمة</label><input id="leadFollowUp" type="datetime-local"></div>
+        <div class="crm-field"><label for="leadAssigned">المسؤول</label><select id="leadAssigned"><option value="">— غير محدد —</option></select></div>
+      </div>
+      <div class="crm-field" style="margin-top:12px"><label for="leadNotes">ملاحظات</label><textarea id="leadNotes"></textarea></div>
+      <div class="crm-form-actions">
+        <button type="button" class="crm-btn" id="crmLeadCancel">إلغاء</button>
+        <button type="submit" class="crm-btn crm-btn-primary" id="crmLeadSave">حفظ</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="assets/crm-client.js"></script>
+<script>
+(function () {
+  "use strict";
+  var CRM = window.Basma.CRM;
+  var STAGE_LABELS = { new: "جديد", contacted: "تم التواصل", qualified: "مؤهل", meeting_scheduled: "اجتماع مجدول", proposal_sent: "أرسل العرض", negotiation: "تفاوض", won: "فاز", lost: "خسر" };
+  var PRIORITY_LABELS = { low: "منخفضة", medium: "متوسطة", high: "عالية", urgent: "عاجلة" };
+  var PRIORITY_BADGE = { low: "mute", medium: "gold", high: "warning", urgent: "danger" };
+  var STAGE_BADGE = { new: "mute", contacted: "gold", qualified: "gold", meeting_scheduled: "warning", proposal_sent: "warning", negotiation: "warning", won: "success", lost: "danger" };
+  var STAGE_PROBABILITY = { new: 10, contacted: 20, qualified: 35, meeting_scheduled: 50, proposal_sent: 65, negotiation: 80, won: 100, lost: 0 };
+  var PAGE_SIZE = 25;
+  var LOOKUP_CAP = 500; // dropdown/name-lookup lists are capped, not the full table — see report
+
+  var db, who, companies = [], contacts = [], members = [], leads = [];
+  var page = 0, totalCount = 0, searchDebounce = null;
+
+  function opt(value, label, selected) {
+    return '<option value="' + CRM.escape(value) + '"' + (selected ? " selected" : "") + ">" + CRM.escape(label) + "</option>";
+  }
+
+  function populateSelects() {
+    var companySel = document.getElementById("leadCompany");
+    companySel.innerHTML = '<option value="">— بدون شركة —</option>' + companies.map(function (c) { return opt(c.id, c.name); }).join("");
+    var contactSel = document.getElementById("leadContact");
+    contactSel.innerHTML = '<option value="">— بدون شخص —</option>' + contacts.map(function (c) { return opt(c.id, c.full_name); }).join("");
+    var assignedSel = document.getElementById("leadAssigned");
+    assignedSel.innerHTML = '<option value="">— غير محدد —</option>' + members.map(function (m) { return opt(m.user_id, m.full_name || m.user_id.slice(0, 8)); }).join("");
+
+    var filterAssigned = document.getElementById("fAssigned");
+    if (filterAssigned) filterAssigned.innerHTML = '<option value="">الكل</option>' + members.map(function (m) { return opt(m.user_id, m.full_name || m.user_id.slice(0, 8)); }).join("");
+  }
+
+  function companyName(id) { var c = companies.filter(function (x) { return x.id === id; })[0]; return c ? c.name : "—"; }
+  function contactName(id) { var c = contacts.filter(function (x) { return x.id === id; })[0]; return c ? c.full_name : "—"; }
+  function memberName(id) {
+    if (!id) return "—";
+    if (who && CRM.state.session && id === CRM.state.session.user.id) return "أنا";
+    var m = members.filter(function (x) { return x.user_id === id; })[0];
+    return m ? (m.full_name || id.slice(0, 8)) : id.slice(0, 8);
+  }
+
+  function openModal(lead) {
+    document.getElementById("crmLeadModalTitle").textContent = lead ? "تعديل Lead" : "Lead جديد";
+    document.getElementById("leadId").value = lead ? lead.id : "";
+    document.getElementById("leadTitle").value = lead ? lead.title : "";
+    document.getElementById("leadCompany").value = (lead && lead.company_id) || "";
+    document.getElementById("leadContact").value = (lead && lead.contact_id) || "";
+    document.getElementById("leadService").value = (lead && lead.service_interest) || "";
+    document.getElementById("leadCountry").value = (lead && lead.country) || "";
+    document.getElementById("leadSource").value = (lead && lead.source) || "";
+    document.getElementById("leadValue").value = lead ? lead.estimated_value : 0;
+    document.getElementById("leadCurrency").value = (lead && lead.currency) || "USD";
+    document.getElementById("leadPriority").value = (lead && lead.priority) || "medium";
+    document.getElementById("leadStage").value = (lead && lead.stage) || "new";
+    document.getElementById("leadFollowUp").value = lead && lead.next_follow_up_at ? lead.next_follow_up_at.slice(0, 16) : "";
+    document.getElementById("leadAssigned").value = (lead && lead.assigned_to) || "";
+    document.getElementById("leadNotes").value = "";
+    document.getElementById("crmLeadModalOverlay").classList.add("is-open");
+  }
+  function closeModal() { document.getElementById("crmLeadModalOverlay").classList.remove("is-open"); }
+
+  async function saveLead(event) {
+    event.preventDefault();
+    var id = document.getElementById("leadId").value;
+    var payload = {
+      title: document.getElementById("leadTitle").value.trim(),
+      company_id: document.getElementById("leadCompany").value || null,
+      contact_id: document.getElementById("leadContact").value || null,
+      service_interest: document.getElementById("leadService").value.trim() || null,
+      country: document.getElementById("leadCountry").value.trim() || null,
+      source: document.getElementById("leadSource").value.trim() || null,
+      estimated_value: Number(document.getElementById("leadValue").value || 0),
+      currency: document.getElementById("leadCurrency").value.trim() || "USD",
+      priority: document.getElementById("leadPriority").value,
+      stage: document.getElementById("leadStage").value,
+      next_follow_up_at: document.getElementById("leadFollowUp").value || null,
+      assigned_to: document.getElementById("leadAssigned").value || null
+    };
+    if (STAGE_PROBABILITY.hasOwnProperty(payload.stage)) payload.probability = STAGE_PROBABILITY[payload.stage];
+    if (!payload.title) { CRM.toast("عنوان الفرصة مطلوب.", "danger"); return; }
+    var saveBtn = document.getElementById("crmLeadSave");
+    saveBtn.disabled = true;
+    try {
+      var res;
+      if (id) {
+        res = await db.from("crm_leads").update(payload).eq("id", id);
+      } else {
+        payload.status = "open";
+        res = await db.from("crm_leads").insert(payload).select().single();
+      }
+      if (res.error) throw res.error;
+      CRM.toast(id ? "تم تحديث الـ Lead." : "تم إنشاء Lead جديد.", "info");
+      // Fire-and-forget admin email notification for manually-created Leads
+      // only. Not awaited on purpose: the modal already closed and the list
+      // already reloads below regardless of whether this succeeds — a slow
+      // or failed notification must never affect the CRM user's flow.
+      if (!id && res.data && res.data.id) {
+        fetch("/api/notify-lead", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ leadId: res.data.id }),
+        }).catch(function () { /* best-effort only; failure is logged server-side */ });
+      }
+      closeModal();
+      await loadLeads();
+    } catch (err) {
+      CRM.toast("تعذّر الحفظ: " + (err.message || ""), "danger");
+    } finally {
+      saveBtn.disabled = false;
+    }
+  }
+
+  async function deleteLead(id) {
+    if (!CRM.confirm("حذف هذا الـ Lead نهائيًا؟ هذا الإجراء لا يمكن التراجع عنه.")) return;
+    try {
+      var res = await db.from("crm_leads").delete().eq("id", id);
+      if (res.error) throw res.error;
+      CRM.toast("تم الحذف.", "info");
+      await loadLeads();
+    } catch (err) {
+      CRM.toast("تعذّر الحذف: " + (err.message || ""), "danger");
+    }
+  }
+
+  async function changeStage(id, stage) {
+    try {
+      var probability = STAGE_PROBABILITY.hasOwnProperty(stage) ? STAGE_PROBABILITY[stage] : undefined;
+      var updatePayload = probability === undefined ? { stage: stage } : { stage: stage, probability: probability };
+      var res = await db.from("crm_leads").update(updatePayload).eq("id", id);
+      if (res.error) throw res.error;
+      await db.from("crm_activities").insert({ lead_id: id, activity_type: "status_change", subject: "تغيير المرحلة إلى: " + (STAGE_LABELS[stage] || stage) });
+      CRM.toast("تم تحديث المرحلة.", "info");
+      await loadLeads();
+    } catch (err) {
+      CRM.toast("تعذّر تحديث المرحلة: " + (err.message || ""), "danger");
+    }
+  }
+
+  function renderTable() {
+    var body = document.getElementById("crmLeadsTableBody");
+    var wrap = document.getElementById("crmLeadsTableWrap");
+    var empty = document.getElementById("crmLeadsEmpty");
+    if (!leads.length) { wrap.style.display = "none"; empty.style.display = "block"; renderPagination(); return; }
+    wrap.style.display = "block"; empty.style.display = "none";
+
+    var canWrite = who.can_write;
+    var isAdmin = who.is_admin;
+
+    body.innerHTML = leads.map(function (l) {
+      var stageOptions = Object.keys(STAGE_LABELS).map(function (s) { return opt(s, STAGE_LABELS[s], s === l.stage); }).join("");
+      return "<tr>" +
+        "<td>" + CRM.escape(companyName(l.company_id)) + "</td>" +
+        "<td>" + CRM.escape(contactName(l.contact_id)) + "<div class=\"crm-muted\" style=\"font-size:11.5px\">" + CRM.escape(l.title) + "</div></td>" +
+        "<td>" + CRM.escape(l.service_interest || "—") + "</td>" +
+        "<td>" + CRM.escape(l.country || "—") + "</td>" +
+        "<td>" + CRM.formatMoney(l.estimated_value, l.currency) + "</td>" +
+        "<td><span class=\"crm-badge crm-badge-" + (PRIORITY_BADGE[l.priority] || "mute") + "\">" + (PRIORITY_LABELS[l.priority] || l.priority) + "</span></td>" +
+        "<td>" + (canWrite
+          ? "<select class=\"crm-stage-select\" data-id=\"" + l.id + "\" style=\"background:var(--crm-panel-2);color:var(--crm-text);border:1px solid var(--crm-border);border-radius:8px;padding:6px 8px;font-size:12px\">" + stageOptions + "</select>"
+          : "<span class=\"crm-badge crm-badge-" + (STAGE_BADGE[l.stage] || "mute") + "\">" + (STAGE_LABELS[l.stage] || l.stage) + "</span>") + "</td>" +
+        "<td>" + CRM.formatDate(l.last_contact_at) + "</td>" +
+        "<td>" + CRM.formatDate(l.next_follow_up_at) + "</td>" +
+        "<td>" + CRM.escape(memberName(l.assigned_to)) + "</td>" +
+        "<td style=\"white-space:nowrap;display:flex;gap:6px\">" +
+        "<a class=\"crm-btn crm-btn-sm\" href=\"lead-details.html?id=" + l.id + "\">تفاصيل</a>" +
+        (canWrite ? "<button class=\"crm-btn crm-btn-sm crm-edit-btn\" data-id=\"" + l.id + "\">تعديل</button>" : "") +
+        (isAdmin ? "<button class=\"crm-btn crm-btn-sm crm-btn-danger crm-delete-btn\" data-id=\"" + l.id + "\">حذف</button>" : "") +
+        "</td></tr>";
+    }).join("");
+
+    body.querySelectorAll(".crm-edit-btn").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var lead = leads.filter(function (l) { return l.id === btn.dataset.id; })[0];
+        openModal(lead);
+      });
+    });
+    body.querySelectorAll(".crm-delete-btn").forEach(function (btn) {
+      btn.addEventListener("click", function () { deleteLead(btn.dataset.id); });
+    });
+    body.querySelectorAll(".crm-stage-select").forEach(function (sel) {
+      sel.addEventListener("change", function () { changeStage(sel.dataset.id, sel.value); });
+    });
+    renderPagination();
+  }
+
+  function renderPagination() {
+    var el = document.getElementById("crmPagination");
+    if (!el) return;
+    var totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
+    var from = totalCount ? page * PAGE_SIZE + 1 : 0;
+    var to = Math.min(totalCount, (page + 1) * PAGE_SIZE);
+    el.innerHTML =
+      '<span>عرض ' + from + '–' + to + ' من ' + totalCount + '</span>' +
+      '<div class="crm-pagination-controls">' +
+      '<button class="crm-btn crm-btn-sm" id="pgPrev"' + (page <= 0 ? " disabled" : "") + '>السابق</button>' +
+      '<span class="crm-pagination-page">صفحة ' + (page + 1) + ' من ' + totalPages + '</span>' +
+      '<button class="crm-btn crm-btn-sm" id="pgNext"' + (page + 1 >= totalPages ? " disabled" : "") + '>التالي</button>' +
+      "</div>";
+    var prev = document.getElementById("pgPrev"), next = document.getElementById("pgNext");
+    if (prev) prev.addEventListener("click", function () { if (page > 0) { page--; loadLeads(); } });
+    if (next) next.addEventListener("click", function () { if ((page + 1) * PAGE_SIZE < totalCount) { page++; loadLeads(); } });
+  }
+
+  // Server-side filtered + paginated query. Cross-entity search (by company
+  // or contact name) resolves to a small set of ids first via two bounded
+  // lookup queries, then folds into the main filter — this keeps the whole
+  // operation to a handful of indexed queries regardless of table size,
+  // instead of pulling every Lead row into the browser to filter in JS.
+  async function loadLeads() {
+    // Strip characters that are structurally significant in PostgREST's
+    // .or() mini-language (comma separates conditions, parentheses group
+    // them) so a search term like "Ahmed, Trading Co" can't corrupt the
+    // filter string sent to Supabase.
+    var q = (document.getElementById("fSearch").value || "").trim().replace(/[,()]/g, " ").replace(/\s+/g, " ").trim();
+    var stage = document.getElementById("fStage").value;
+    var priority = document.getElementById("fPriority").value;
+    var country = (document.getElementById("fCountry").value || "").trim();
+    var service = (document.getElementById("fService").value || "").trim();
+    var source = (document.getElementById("fSource").value || "").trim();
+    var assigned = document.getElementById("fAssigned").value;
+
+    try {
+      var query = db.from("crm_leads").select("*", { count: "exact" });
+      if (stage) query = query.eq("stage", stage);
+      if (priority) query = query.eq("priority", priority);
+      if (country) query = query.ilike("country", "%" + country + "%");
+      if (service) query = query.ilike("service_interest", "%" + service + "%");
+      if (source) query = query.ilike("source", "%" + source + "%");
+      if (assigned) query = query.eq("assigned_to", assigned);
+
+      if (q) {
+        var matchIds = [];
+        try {
+          var companyMatches = await db.from("crm_companies").select("id").ilike("name", "%" + q + "%").limit(200);
+          (companyMatches.data || []).forEach(function (c) { matchIds.push(c.id); });
+        } catch (e) { /* non-fatal */ }
+        var orParts = ["title.ilike.%" + q + "%", "service_interest.ilike.%" + q + "%", "country.ilike.%" + q + "%"];
+        if (matchIds.length) orParts.push("company_id.in.(" + matchIds.join(",") + ")");
+        try {
+          var contactMatches = await db.from("crm_contacts").select("id").ilike("full_name", "%" + q + "%").limit(200);
+          var contactIds = (contactMatches.data || []).map(function (c) { return c.id; });
+          if (contactIds.length) orParts.push("contact_id.in.(" + contactIds.join(",") + ")");
+        } catch (e) { /* non-fatal */ }
+        query = query.or(orParts.join(","));
+      }
+
+      query = query.order("created_at", { ascending: false }).range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1);
+
+      var res = await query;
+      if (res.error) throw res.error;
+      leads = res.data || [];
+      totalCount = res.count || 0;
+      renderTable();
+    } catch (err) {
+      CRM.toast("تعذّر تحميل العملاء المحتملين: " + (err.message || ""), "danger");
+    }
+  }
+
+  function resetAndReload() { page = 0; loadLeads(); }
+
+  async function boot() {
+    var ctx = await window.Basma.CRM.boot({ activeKey: "leads", title: "العملاء المحتملون", sub: "إدارة كل الفرص التجارية في مكان واحد" });
+    if (!ctx) return;
+    db = ctx.client; who = ctx.who;
+    var app = document.getElementById("crmApp");
+
+    var addBtn = who.can_write ? '<button class="crm-btn crm-btn-primary" id="crmAddLead">+ إضافة Lead</button>' : "";
+    document.getElementById("crmTopbarActions").innerHTML = addBtn;
+
+    app.innerHTML =
+      '<div class="crm-card"><div class="crm-filters">' +
+      '<div class="crm-field"><label>بحث</label><input id="fSearch" placeholder="اسم، شركة، شخص…"></div>' +
+      '<div class="crm-field"><label>المرحلة</label><select id="fStage"><option value="">الكل</option>' + Object.keys(STAGE_LABELS).map(function (s) { return opt(s, STAGE_LABELS[s]); }).join("") + '</select></div>' +
+      '<div class="crm-field"><label>الأولوية</label><select id="fPriority"><option value="">الكل</option>' + Object.keys(PRIORITY_LABELS).map(function (p) { return opt(p, PRIORITY_LABELS[p]); }).join("") + '</select></div>' +
+      '<div class="crm-field"><label>الدولة</label><input id="fCountry"></div>' +
+      '<div class="crm-field"><label>الخدمة</label><input id="fService"></div>' +
+      '<div class="crm-field"><label>المصدر</label><input id="fSource"></div>' +
+      '<div class="crm-field"><label>المسؤول</label><select id="fAssigned"><option value="">الكل</option></select></div>' +
+      '</div></div>' +
+      '<div class="crm-table-wrap" id="crmLeadsTableWrap"><table class="crm-table"><thead><tr>' +
+      "<th>الشركة</th><th>الشخص</th><th>الخدمة</th><th>الدولة</th><th>القيمة</th><th>الأولوية</th><th>المرحلة</th><th>آخر تواصل</th><th>المتابعة القادمة</th><th>المسؤول</th><th>الإجراءات</th>" +
+      '</tr></thead><tbody id="crmLeadsTableBody"></tbody></table></div>' +
+      // Pagination sits OUTSIDE .crm-table-wrap on purpose: that wrapper is
+      // horizontally scrollable (overflow-x: auto) so wide tables fit on
+      // mobile — nesting the prev/next controls inside it would sweep them
+      // into the scroll region too, forcing a sideways scroll just to page.
+      '<div class="crm-pagination" id="crmPagination"></div>' +
+      '<div class="crm-card crm-empty" id="crmLeadsEmpty" style="display:none">' +
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M9 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM4 20c0-3 2.5-5 5-5s5 2 5 5"/></svg>' +
+      "<h2 style=\"color:#fbf7f0\">لا توجد نتائج مطابقة</h2><p>جرّب تغيير الفلاتر أو أضف Lead جديد.</p></div>";
+
+    if (who.can_write) document.getElementById("crmAddLead").addEventListener("click", function () { openModal(null); });
+    document.getElementById("crmLeadCancel").addEventListener("click", closeModal);
+    document.getElementById("crmLeadForm").addEventListener("submit", saveLead);
+
+    document.getElementById("fSearch").addEventListener("input", function () {
+      clearTimeout(searchDebounce);
+      searchDebounce = setTimeout(resetAndReload, 350);
+    });
+    ["fStage", "fPriority", "fCountry", "fService", "fSource", "fAssigned"].forEach(function (id) {
+      document.getElementById(id).addEventListener("change", resetAndReload);
+    });
+
+    try {
+      var companiesRes = await db.from("crm_companies").select("id,name").order("name").limit(LOOKUP_CAP);
+      companies = companiesRes.data || [];
+      var contactsRes = await db.from("crm_contacts").select("id,full_name").order("full_name").limit(LOOKUP_CAP);
+      contacts = contactsRes.data || [];
+      var membersRes = await db.from("crm_members").select("user_id,full_name,role").eq("is_active", true);
+      members = membersRes.data || [];
+      populateSelects();
+    } catch (err) { /* non-fatal for the list view */ }
+
+    await loadLeads();
+  }
+
+  boot();
+})();
+</script>
+</body>
+</html>

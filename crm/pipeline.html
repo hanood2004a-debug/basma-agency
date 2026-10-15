@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>مسار المبيعات | Basma CRM</title>
+<link rel="icon" type="image/png" href="../assets/basma-logo-navbar.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/crm.css">
+</head>
+<body class="crm-body">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="assets/crm-client.js"></script>
+<script>
+(function () {
+  "use strict";
+  var CRM = window.Basma.CRM;
+  var STAGES = [
+    { key: "new", label: "جديد", probability: 10 },
+    { key: "contacted", label: "تم التواصل", probability: 20 },
+    { key: "qualified", label: "مؤهل", probability: 35 },
+    { key: "meeting_scheduled", label: "اجتماع مجدول", probability: 50 },
+    { key: "proposal_sent", label: "أرسل العرض", probability: 65 },
+    { key: "negotiation", label: "تفاوض", probability: 80 },
+    { key: "won", label: "فاز", probability: 100 },
+    { key: "lost", label: "خسر", probability: 0 }
+  ];
+  var PRIORITY_LABELS = { low: "منخفضة", medium: "متوسطة", high: "عالية", urgent: "عاجلة" };
+  var PRIORITY_BADGE = { low: "mute", medium: "gold", high: "warning", urgent: "danger" };
+
+  var db, who, leads = [], companies = [], contacts = [], members = [], dragId = null;
+  var filters = { q: "", assigned: "", service: "", source: "" };
+  // The pipeline is a kanban board: every stage column must render simultaneously
+  // for drag-and-drop to work, so true offset pagination isn't applicable here
+  // (unlike the list pages). Instead we bound the query to the most recent
+  // OPEN_LEADS_CAP active leads — this is a deliberate, disclosed trade-off
+  // (kanban views are for active work-in-progress, not full historical browsing).
+  var OPEN_LEADS_CAP = 500, LOOKUP_CAP = 500;
+
+  function companyName(id) { var c = companies.filter(function (x) { return x.id === id; })[0]; return c ? c.name : null; }
+  function contactName(id) { var c = contacts.filter(function (x) { return x.id === id; })[0]; return c ? c.full_name : null; }
+  function memberName(id) { if (!id) return "—"; var m = members.filter(function (x) { return x.user_id === id; })[0]; return m ? (m.full_name || id.slice(0, 8)) : id.slice(0, 8); }
+
+  function visibleLeads() {
+    var q = filters.q.trim().toLowerCase();
+    return leads.filter(function (l) {
+      if (filters.assigned && l.assigned_to !== filters.assigned) return false;
+      if (filters.service && (l.service_interest || "") !== filters.service) return false;
+      if (filters.source && (l.source || "") !== filters.source) return false;
+      if (!q) return true;
+      var haystack = [l.title, companyName(l.company_id), contactName(l.contact_id)].filter(Boolean).join(" ").toLowerCase();
+      return haystack.includes(q);
+    });
+  }
+
+  function cardHtml(l) {
+    var idx = STAGES.findIndex(function (s) { return s.key === l.stage; });
+    var moveBtns = "";
+    if (who.can_write) {
+      if (idx > 0) moveBtns += '<button class="crm-btn crm-btn-sm crm-move-btn" data-id="' + l.id + '" data-stage="' + STAGES[idx - 1].key + '">◀ رجوع</button>';
+      if (idx < STAGES.length - 1) moveBtns += '<button class="crm-btn crm-btn-sm crm-move-btn" data-id="' + l.id + '" data-stage="' + STAGES[idx + 1].key + '">تقدّم ▶</button>';
+    }
+    return '<div class="crm-kanban-card" draggable="' + (who.can_write ? "true" : "false") + '" data-id="' + l.id + '">' +
+      "<strong>" + CRM.escape(companyName(l.company_id) || l.title) + "</strong>" +
+      '<div class="crm-muted">' + CRM.escape(l.service_interest || "—") + "</div>" +
+      '<div class="crm-kanban-meta">' +
+      '<span class="crm-badge crm-badge-gold">' + CRM.formatMoney(l.estimated_value, l.currency) + "</span>" +
+      '<span class="crm-badge crm-badge-' + (PRIORITY_BADGE[l.priority] || "mute") + '">' + (PRIORITY_LABELS[l.priority] || l.priority) + "</span>" +
+      "</div>" +
+      (l.next_follow_up_at ? '<div class="crm-muted" style="margin-top:6px">متابعة: ' + CRM.formatDate(l.next_follow_up_at) + "</div>" : "") +
+      '<a href="lead-details.html?id=' + l.id + '" style="display:block;margin-top:6px;font-size:11.5px;color:var(--crm-gold)">فتح التفاصيل ←</a>' +
+      (moveBtns ? '<div class="crm-kanban-move">' + moveBtns + "</div>" : "") +
+      "</div>";
+  }
+
+  function render() {
+    var board = document.getElementById("crmKanban");
+    var scoped = visibleLeads();
+    board.innerHTML = STAGES.map(function (stage) {
+      var stageLeads = scoped.filter(function (l) { return l.stage === stage.key; });
+      var total = stageLeads.reduce(function (s, l) { return s + Number(l.estimated_value || 0); }, 0);
+      return '<div class="crm-kanban-col">' +
+        '<div class="crm-kanban-col-head"><span>' + stage.label + '</span><span class="crm-badge crm-badge-mute">' + stageLeads.length + "</span></div>" +
+        '<div class="crm-kanban-col-body" data-stage="' + stage.key + '">' +
+        (stageLeads.length ? stageLeads.map(cardHtml).join("") : '<p class="crm-muted" style="font-size:12px;text-align:center;padding:14px 0">لا يوجد</p>') +
+        "</div>" +
+        '<div style="padding:8px 12px;border-top:1px solid var(--crm-border);font-size:11.5px;color:var(--crm-text-mute)">إجمالي: ' + CRM.formatMoney(total, "USD") + "</div>" +
+        "</div>";
+    }).join("");
+
+    if (who.can_write) {
+      board.querySelectorAll(".crm-kanban-card").forEach(function (card) {
+        card.addEventListener("dragstart", function () { dragId = card.dataset.id; card.style.opacity = ".4"; });
+        card.addEventListener("dragend", function () { card.style.opacity = "1"; });
+      });
+      board.querySelectorAll(".crm-kanban-col-body").forEach(function (col) {
+        col.addEventListener("dragover", function (e) { e.preventDefault(); col.classList.add("is-dragover"); });
+        col.addEventListener("dragleave", function () { col.classList.remove("is-dragover"); });
+        col.addEventListener("drop", function (e) {
+          e.preventDefault();
+          col.classList.remove("is-dragover");
+          if (dragId) moveLead(dragId, col.dataset.stage);
+          dragId = null;
+        });
+      });
+      board.querySelectorAll(".crm-move-btn").forEach(function (btn) {
+        btn.addEventListener("click", function () { moveLead(btn.dataset.id, btn.dataset.stage); });
+      });
+    }
+  }
+
+  async function moveLead(id, newStage) {
+    var lead = leads.filter(function (l) { return l.id === id; })[0];
+    if (!lead || lead.stage === newStage) return;
+    var stageInfo = STAGES.filter(function (s) { return s.key === newStage; })[0];
+    try {
+      var res = await db.from("crm_leads").update({ stage: newStage, probability: stageInfo.probability }).eq("id", id);
+      if (res.error) throw res.error;
+      await db.from("crm_activities").insert({
+        lead_id: id, activity_type: "status_change",
+        subject: "انتقل إلى مرحلة: " + stageInfo.label
+      });
+      lead.stage = newStage;
+      lead.probability = stageInfo.probability;
+      render();
+      CRM.toast("تم تحديث المرحلة إلى «" + stageInfo.label + "».", "info");
+    } catch (err) {
+      CRM.toast("تعذّر تحديث المرحلة: " + (err.message || ""), "danger");
+    }
+  }
+
+  async function boot() {
+    var ctx = await CRM.boot({ activeKey: "pipeline", title: "مسار المبيعات", sub: who_desc() });
+    if (!ctx) return;
+    db = ctx.client; who = ctx.who;
+    document.getElementById("crmApp").innerHTML =
+      '<div class="crm-card"><div class="crm-filters">' +
+      '<div class="crm-field" style="min-width:220px"><label>بحث</label><input id="fvSearch" placeholder="Lead، شركة، أو جهة اتصال"></div>' +
+      '<div class="crm-field"><label>المسؤول</label><select id="fvAssigned"><option value="">الكل</option></select></div>' +
+      '<div class="crm-field"><label>الخدمة</label><select id="fvService"><option value="">الكل</option></select></div>' +
+      '<div class="crm-field"><label>المصدر</label><select id="fvSource"><option value="">الكل</option></select></div>' +
+      "</div></div>" +
+      '<div class="crm-card" style="padding:8px 8px 16px"><div class="crm-kanban" id="crmKanban"></div></div>';
+
+    try {
+      var leadsRes = await db.from("crm_leads").select("*").eq("status", "open").order("created_at", { ascending: false }).limit(OPEN_LEADS_CAP);
+      var wonLostRes = await db.from("crm_leads").select("*").neq("status", "open").order("updated_at", { ascending: false }).limit(60);
+      if (leadsRes.error) throw leadsRes.error;
+      if (wonLostRes.error) throw wonLostRes.error;
+      leads = (leadsRes.data || []).concat(wonLostRes.data || []);
+      if ((leadsRes.data || []).length >= OPEN_LEADS_CAP) {
+        var warn = document.createElement("div");
+        warn.className = "crm-alert crm-alert-warning";
+        warn.style.marginBottom = "12px";
+        warn.textContent = "يعرض المسار أحدث " + OPEN_LEADS_CAP + " عميلاً مفتوحًا فقط لأسباب تتعلق بالأداء. استخدم صفحة العملاء المحتملين للبحث الكامل.";
+        document.getElementById("crmApp").insertBefore(warn, document.getElementById("crmApp").firstChild);
+      }
+
+      var companiesRes = await db.from("crm_companies").select("id,name").limit(LOOKUP_CAP);
+      companies = companiesRes.data || [];
+      var contactsRes = await db.from("crm_contacts").select("id,full_name").limit(LOOKUP_CAP);
+      contacts = contactsRes.data || [];
+      var membersRes = await db.from("crm_members").select("user_id,full_name").eq("is_active", true);
+      members = membersRes.data || [];
+
+      var services = Array.from(new Set(leads.map(function (l) { return l.service_interest; }).filter(Boolean)));
+      var sources = Array.from(new Set(leads.map(function (l) { return l.source; }).filter(Boolean)));
+      document.getElementById("fvAssigned").innerHTML = '<option value="">الكل</option>' + members.map(function (m) { return '<option value="' + m.user_id + '">' + CRM.escape(m.full_name || m.user_id.slice(0, 8)) + "</option>"; }).join("");
+      document.getElementById("fvService").innerHTML = '<option value="">الكل</option>' + services.map(function (s) { return '<option value="' + CRM.escape(s) + '">' + CRM.escape(s) + "</option>"; }).join("");
+      document.getElementById("fvSource").innerHTML = '<option value="">الكل</option>' + sources.map(function (s) { return '<option value="' + CRM.escape(s) + '">' + CRM.escape(s) + "</option>"; }).join("");
+
+      document.getElementById("fvSearch").addEventListener("input", function (e) { filters.q = e.target.value || ""; render(); });
+      document.getElementById("fvAssigned").addEventListener("change", function (e) { filters.assigned = e.target.value; render(); });
+      document.getElementById("fvService").addEventListener("change", function (e) { filters.service = e.target.value; render(); });
+      document.getElementById("fvSource").addEventListener("change", function (e) { filters.source = e.target.value; render(); });
+
+      render();
+    } catch (err) {
+      document.getElementById("crmApp").innerHTML = '<div class="crm-alert crm-alert-danger">تعذّر تحميل المسار: ' + CRM.escape(err.message || "") + "</div>";
+    }
+  }
+  function who_desc() { return "اسحب البطاقات بين المراحل، أو استخدم أزرار النقل على كل بطاقة"; }
+
+  boot();
+})();
+</script>
+</body>
+</html>

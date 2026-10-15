@@ -1,0 +1,10 @@
+
+> basma-digital-solutions@1.0.0 vercel_dev
+> vercel dev --listen 3001
+
+Running "npm run build"
+
+> basma-digital-solutions@1.0.0 build
+> node scripts/validate.js
+
+Basma website validation passed.

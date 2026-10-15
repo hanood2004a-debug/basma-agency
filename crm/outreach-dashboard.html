@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>لوحة التواصل | Basma CRM</title>
+<link rel="icon" type="image/png" href="../assets/basma-logo-navbar.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/crm.css">
+</head>
+<body class="crm-body">
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="assets/crm-client.js"></script>
+<script>
+(function () {
+  "use strict";
+  var CRM = window.Basma.CRM;
+  var db;
+
+  var EMAIL_LABELS = { not_sent: "لم يُرسل", sent: "تم الإرسال", opened: "تم الفتح", replied: "تم الرد", interested: "مهتم", not_interested: "غير مهتم" };
+  var LINKEDIN_LABELS = { not_contacted: "لم يتم التواصل", connection_sent: "طلب اتصال مُرسل", connected: "تم الاتصال", message_sent: "رسالة مُرسلة", replied: "تم الرد" };
+  var WHATSAPP_LABELS = { not_sent: "لم يُرسل", sent: "تم الإرسال", read: "تمت القراءة", replied: "تم الرد" };
+  var PHONE_LABELS = { not_called: "لم يتم الاتصال", called: "تم الاتصال", follow_up_required: "يتطلب متابعة" };
+
+  // v1.6 — the "automation" block from crm_outreach_dashboard_snapshot(),
+  // channel-agnostic (crm_outreach_messages), distinct from the four
+  // legacy per-channel status columns above.
+  var CHANNEL_LABELS_V16 = { email: "بريد إلكتروني", whatsapp: "واتساب", linkedin: "LinkedIn", phone: "هاتف" };
+  var MSG_STATUS_LABELS = { sent: "تم الإرسال", failed: "فشل", completed: "مكتملة" };
+
+  function mapStatusRows(list, labels) {
+    return (list || []).map(function (r) { return { label: labels[r.status] || r.status, count: r.count }; });
+  }
+
+  function mapChannelStatusRows(list) {
+    return (list || []).map(function (r) { return { label: (CHANNEL_LABELS_V16[r.channel] || r.channel) + " — " + (MSG_STATUS_LABELS[r.status] || r.status), count: r.count }; });
+  }
+  function mapTemplateRows(list) {
+    return (list || []).map(function (r) { return { label: (r.template_name || "بدون قالب") + " (" + (CHANNEL_LABELS_V16[r.channel] || r.channel) + ")", count: r.count }; });
+  }
+  function mapCampaignRows(list) {
+    return (list || []).map(function (r) { return { label: r.campaign_name, count: r.count }; });
+  }
+  function mapCountryChannelRows(list) {
+    return (list || []).map(function (r) { return { label: r.country + " — " + (CHANNEL_LABELS_V16[r.channel] || r.channel), count: r.count }; });
+  }
+
+  function renderBlocked() {
+    document.getElementById("crmApp").innerHTML =
+      '<div class="crm-card crm-empty">' +
+      '<h2 style="color:#fbf7f0">لوحة التواصل غير مُفعّلة بعد</h2>' +
+      '<p>دالة <code>crm_outreach_dashboard_snapshot</code> غير موجودة بعد. شغّل ملف <code>CRM-OUTREACH-HUB.sql</code> في محرر SQL في Supabase أولًا، ثم أعد تحميل هذه الصفحة.</p>' +
+      "</div>";
+  }
+
+  function isMigrationMissingError(err) {
+    var msg = (err && err.message) || "";
+    var code = (err && err.code) || "";
+    return code === "PGRST202" || /schema cache/i.test(msg) || /crm_outreach_dashboard_snapshot/i.test(msg);
+  }
+
+  function kpiCard(label, value, hint) {
+    return '<div class="crm-kpi"><span>' + CRM.escape(label) + "</span><strong>" + value + "</strong>" + (hint ? "<small>" + CRM.escape(hint) + "</small>" : "") + "</div>";
+  }
+
+  async function load() {
+    try {
+      var res = await db.rpc("crm_outreach_dashboard_snapshot");
+      if (res.error) throw res.error;
+      var d = res.data || {};
+      var k = d.kpis || {};
+
+      document.getElementById("crmKpis").innerHTML =
+        kpiCard("إجمالي الشركات", k.total_companies || 0) +
+        kpiCard("تم التواصل", k.contacted || 0) +
+        kpiCard("بانتظار الرد", k.waiting_reply || 0) +
+        kpiCard("تم الرد", k.replied || 0) +
+        kpiCard("مهتم", k.interested || 0) +
+        kpiCard("اجتماعات", k.meetings || 0) +
+        kpiCard("عروض أسعار", k.proposals || 0) +
+        kpiCard("عملاء", k.clients || 0);
+
+      document.getElementById("crmChartEmail").innerHTML = CRM.charts.distBar(mapStatusRows(d.by_email_status, EMAIL_LABELS), "label");
+      document.getElementById("crmChartLinkedin").innerHTML = CRM.charts.distBar(mapStatusRows(d.by_linkedin_status, LINKEDIN_LABELS), "label");
+      document.getElementById("crmChartWhatsapp").innerHTML = CRM.charts.distBar(mapStatusRows(d.by_whatsapp_status, WHATSAPP_LABELS), "label");
+      document.getElementById("crmChartPhone").innerHTML = CRM.charts.distBar(mapStatusRows(d.by_phone_status, PHONE_LABELS), "label");
+      document.getElementById("crmChartIndustry").innerHTML = CRM.charts.distBar(d.by_industry || [], "label");
+      document.getElementById("crmChartCountry").innerHTML = CRM.charts.distBar(d.by_country || [], "label");
+
+      // v1.6 automation block. Degrades to zeros/empty charts (not an error)
+      // when the outreach-automation migration hasn't been run yet, since
+      // `d.automation` will simply be undefined on the older function.
+      var a = d.automation || {};
+      document.getElementById("crmAutomationKpis").innerHTML =
+        kpiCard("بريد مُرسل", a.emails_sent || 0) +
+        kpiCard("بريد فاشل", a.emails_failed || 0) +
+        kpiCard("واتساب مُرسل", a.whatsapp_sent || 0) +
+        kpiCard("LinkedIn مُرسل", a.linkedin_sent || 0) +
+        kpiCard("مكالمات مكتملة", a.calls_completed || 0) +
+        kpiCard("بانتظار الرد", a.waiting_reply || 0) +
+        kpiCard("تم الرد", a.replied || 0) +
+        kpiCard("مهتم", a.interested || 0) +
+        kpiCard("طلب اجتماع", a.meeting_requested || 0) +
+        kpiCard("طلب عرض سعر", a.proposal_requested || 0) +
+        kpiCard("فوز", a.won || 0) +
+        kpiCard("إجمالي التواصل الصادر", a.total_outbound || 0);
+      document.getElementById("crmAutomationRates").innerHTML =
+        kpiCard("معدل الرد", (a.reply_rate || 0) + "%") +
+        kpiCard("معدل الاهتمام", (a.interest_rate || 0) + "%") +
+        kpiCard("معدل الاجتماعات", (a.meeting_rate || 0) + "%") +
+        kpiCard("معدل التحويل", (a.conversion_rate || 0) + "%");
+      document.getElementById("crmChartChannelStatus").innerHTML = CRM.charts.distBar(mapChannelStatusRows(a.by_channel_status), "label");
+      document.getElementById("crmChartTemplate").innerHTML = CRM.charts.distBar(mapTemplateRows(a.by_template), "label");
+      document.getElementById("crmChartCampaign").innerHTML = CRM.charts.distBar(mapCampaignRows(a.by_campaign), "label");
+      document.getElementById("crmChartCountryChannel").innerHTML = CRM.charts.distBar(mapCountryChannelRows(a.by_country_channel), "label");
+    } catch (err) {
+      if (isMigrationMissingError(err)) { renderBlocked(); return; }
+      CRM.toast("تعذّر تحميل اللوحة: " + (err.message || ""), "danger");
+    }
+  }
+
+  async function boot() {
+    var ctx = await CRM.boot({ activeKey: "outreach-dashboard", title: "لوحة التواصل", sub: "نظرة شاملة على تقدم Sales Outreach Hub" });
+    if (!ctx) return;
+    db = ctx.client;
+    document.getElementById("crmTopbarActions").innerHTML =
+      '<a class="crm-btn" href="outreach.html">قائمة التواصل</a> <a class="crm-btn" href="outreach-calendar.html">التقويم</a> <a class="crm-btn" href="outreach-campaigns.html">الحملات</a>';
+
+    document.getElementById("crmApp").innerHTML =
+      '<div class="crm-kpi-grid" id="crmKpis" style="margin-bottom:18px"></div>' +
+      '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px">' +
+      '<div class="crm-card"><div class="crm-section-title"><h2>البريد الإلكتروني</h2></div><div id="crmChartEmail"></div></div>' +
+      '<div class="crm-card"><div class="crm-section-title"><h2>LinkedIn</h2></div><div id="crmChartLinkedin"></div></div>' +
+      '<div class="crm-card"><div class="crm-section-title"><h2>واتساب</h2></div><div id="crmChartWhatsapp"></div></div>' +
+      '<div class="crm-card"><div class="crm-section-title"><h2>الهاتف</h2></div><div id="crmChartPhone"></div></div>' +
+      '<div class="crm-card"><div class="crm-section-title"><h2>حسب القطاع</h2></div><div id="crmChartIndustry"></div></div>' +
+      '<div class="crm-card"><div class="crm-section-title"><h2>حسب الدولة</h2></div><div id="crmChartCountry"></div></div>' +
+      "</div>" +
+      '<div class="crm-section-title" style="margin-top:24px"><h2>الأتمتة والحملات</h2><p class="crm-muted" style="font-size:12.5px">مؤشرات موحّدة عبر جميع القنوات (crm_outreach_messages) — منفصلة عن حالات القنوات الأربع أعلاه.</p></div>' +
+      '<div class="crm-kpi-grid" id="crmAutomationKpis" style="margin-bottom:12px"></div>' +
+      '<div class="crm-kpi-grid" id="crmAutomationRates" style="margin-bottom:18px"></div>' +
+      '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px">' +
+      '<div class="crm-card"><div class="crm-section-title"><h2>حسب القناة والحالة</h2></div><div id="crmChartChannelStatus"></div></div>' +
+      '<div class="crm-card"><div class="crm-section-title"><h2>حسب القالب</h2></div><div id="crmChartTemplate"></div></div>' +
+      '<div class="crm-card"><div class="crm-section-title"><h2>حسب الحملة</h2></div><div id="crmChartCampaign"></div></div>' +
+      '<div class="crm-card"><div class="crm-section-title"><h2>حسب الدولة والقناة</h2></div><div id="crmChartCountryChannel"></div></div>' +
+      "</div>";
+
+    await load();
+  }
+
+  boot();
+})();
+</script>
+</body>
+</html>

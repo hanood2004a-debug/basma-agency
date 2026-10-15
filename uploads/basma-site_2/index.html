@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>بصمة | للحلول الرقمية</title>
+<meta name="description" content="بصمة للحلول الرقمية — وكالة تقنية شاملة لتطوير المواقع، التسويق الرقمي، الهوية البصرية وإدارة المحتوى.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+@font-face { font-family:'Thmanyah Sans'; src:url('assets/fonts/thmanyahsans-Light.woff2') format('woff2'); font-weight:300; font-display:swap; }
+@font-face { font-family:'Thmanyah Sans'; src:url('assets/fonts/thmanyahsans-Regular.woff2') format('woff2'); font-weight:400; font-display:swap; }
+@font-face { font-family:'Thmanyah Sans'; src:url('assets/fonts/thmanyahsans-Medium.woff2') format('woff2'); font-weight:500; font-display:swap; }
+@font-face { font-family:'Thmanyah Sans'; src:url('assets/fonts/thmanyahsans-Bold.woff2') format('woff2'); font-weight:700; font-display:swap; }
+@font-face { font-family:'Thmanyah Sans'; src:url('assets/fonts/thmanyahsans-Black.woff2') format('woff2'); font-weight:900; font-display:swap; }
+@font-face { font-family:'Thmanyah Display'; src:url('assets/fonts/thmanyahserifdisplay-Regular.woff2') format('woff2'); font-weight:400; font-display:swap; }
+@font-face { font-family:'Thmanyah Display'; src:url('assets/fonts/thmanyahserifdisplay-Bold.woff2') format('woff2'); font-weight:700; font-display:swap; }
+@font-face { font-family:'Thmanyah Display'; src:url('assets/fonts/thmanyahserifdisplay-Black.woff2') format('woff2'); font-weight:900; font-display:swap; }
+:root{
+  --navy:#1d3a4a;
+  --navy-soft:#2c5062;
+  --taupe:#c9a98d;
+  --taupe-soft:#e3d3c2;
+  --cream:#fbf7f0;
+  --white:#ffffff;
+  --slate:#5c6b73;
+  --line:rgba(29,58,74,0.12);
+}
+*{box-sizing:border-box;}
+html{scroll-behavior:smooth;}
+body{margin:0;background:var(--cream);color:var(--navy);font-family:'Tajawal',sans-serif;line-height:1.7;-webkit-font-smoothing:antialiased;}
+::selection{background:var(--taupe);color:var(--navy);}
+a{color:inherit;}
+.wrap{max-width:1180px;margin:0 auto;padding-inline:clamp(20px,5vw,72px);}
+h1,h2,h3{font-family:'Thmanyah Sans',sans-serif;margin:0;color:var(--navy);}
+.eyebrow{font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:0.18em;color:var(--taupe);text-transform:uppercase;}
+.mono{font-family:'IBM Plex Mono',monospace;}
+
+/* NAV */
+nav{position:fixed;top:0;right:0;left:0;z-index:50;display:flex;align-items:center;justify-content:space-between;padding:16px clamp(20px,5vw,72px);background:rgba(251,247,240,0.92);backdrop-filter:blur(6px);border-bottom:1px solid var(--line);}
+.logo{display:flex;align-items:center;gap:11px;text-decoration:none;}
+.logo img{width:42px;height:42px;border-radius:50%;object-fit:cover;}
+.logo .word{font-family:'Thmanyah Display','Tajawal',serif;font-weight:700;font-size:24px;color:var(--navy);}
+.navlinks{display:flex;align-items:center;gap:clamp(16px,2.5vw,38px);}
+.navlinks a{text-decoration:none;font-size:14.5px;color:var(--slate);transition:color .2s;}
+.navlinks a:hover{color:var(--navy);}
+.navlinks .cta{padding:10px 22px;background:var(--navy);color:var(--cream);border-radius:3px;font-weight:500;}
+.navlinks .cta:hover{background:var(--navy-soft);}
+
+@media(max-width:880px){
+  .navlinks > a:not(.cta){display:none;}
+}
+
+/* HERO */
+#hero{position:relative;min-height:96vh;display:flex;align-items:center;padding:140px 20px 80px;overflow:hidden;}
+#hero::before{content:'';position:absolute;inset:0;background:radial-gradient(90% 70% at 85% 20%,rgba(201,169,141,0.22),transparent 60%);z-index:0;}
+.hero-grid{position:relative;z-index:1;display:grid;grid-template-columns:1.15fr 0.85fr;gap:clamp(30px,5vw,70px);align-items:center;width:100%;max-width:1180px;margin:0 auto;padding-inline:clamp(20px,5vw,72px);}
+#hero h1{font-size:clamp(42px,6.2vw,74px);font-weight:900;line-height:1.05;letter-spacing:-0.01em;}
+#hero .brush{font-family:'Thmanyah Display','Tajawal',serif;font-weight:700;color:var(--taupe);display:block;font-size:1.1em;}
+#hero p.tag{max-width:520px;margin:24px 0 0;font-size:clamp(16px,1.7vw,19px);color:var(--slate);font-weight:400;}
+.hero-cta{display:flex;gap:14px;flex-wrap:wrap;margin-top:38px;}
+.btn{display:inline-flex;align-items:center;gap:9px;padding:14px 28px;border-radius:3px;text-decoration:none;font-weight:600;font-size:15px;transition:transform .2s,box-shadow .2s;}
+.btn-solid{background:var(--navy);color:var(--cream);}
+.btn-solid:hover{transform:translateY(-2px);box-shadow:0 10px 30px rgba(29,58,74,0.22);}
+.btn-ghost{border:1.5px solid var(--navy);color:var(--navy);}
+.btn-ghost:hover{background:var(--navy);color:var(--cream);}
+.hero-mark{position:relative;display:flex;align-items:center;justify-content:center;}
+.hero-mark img{width:100%;max-width:340px;border-radius:50%;box-shadow:0 30px 70px rgba(29,58,74,0.18);}
+.fp-scan{position:absolute;left:12%;right:12%;height:2px;background:linear-gradient(90deg,transparent,var(--navy),transparent);opacity:0.55;animation:fpScan 3.4s ease-in-out infinite;}
+@keyframes fpScan{0%{top:14%;opacity:0;}12%{opacity:.6;}50%{top:84%;opacity:.6;}62%{opacity:0;}100%{top:84%;opacity:0;}}
+
+/* SECTION shared */
+section.block{padding:clamp(64px,9vh,110px) 0;border-top:1px solid var(--line);}
+.block-head{max-width:640px;margin-bottom:48px;}
+.block-head h2{font-size:clamp(28px,3.6vw,42px);font-weight:800;letter-spacing:-0.01em;margin-top:10px;}
+.block-head p{color:var(--slate);font-size:15.5px;max-width:520px;margin-top:12px;}
+
+/* ABOUT */
+#about{background:var(--white);}
+.about-grid{display:grid;grid-template-columns:1.1fr 0.9fr;gap:clamp(40px,6vw,90px);align-items:center;}
+#about p.lead{font-size:clamp(18px,2vw,22px);font-weight:400;color:var(--navy);line-height:1.85;}
+#about p.lead strong{color:var(--taupe);font-weight:700;}
+.about-stats{display:flex;flex-direction:column;gap:20px;}
+.stat{border-inline-start:2px solid var(--taupe);padding-inline-start:18px;}
+.stat b{display:block;font-family:'Thmanyah Display','Tajawal',serif;font-size:32px;color:var(--navy);}
+.stat span{color:var(--slate);font-size:13.5px;}
+
+/* SERVICES */
+.svc-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:1px;background:var(--line);border:1px solid var(--line);}
+.svc-card{background:var(--cream);padding:32px 26px;display:flex;flex-direction:column;gap:13px;transition:background .25s;}
+.svc-card:hover{background:var(--taupe-soft);}
+.svc-icon{width:36px;height:36px;color:var(--navy);}
+.svc-card h3{font-size:19px;font-weight:700;}
+.svc-card p{color:var(--slate);font-size:14px;margin:0;}
+
+/* PROCESS */
+#process{background:var(--white);}
+.proc-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:0;position:relative;}
+.proc-step{padding:0 22px 0 0;position:relative;}
+.proc-step .num{font-family:'IBM Plex Mono',monospace;font-size:13px;color:var(--taupe);letter-spacing:0.1em;}
+.proc-step h3{margin-top:12px;font-size:18px;}
+.proc-step p{color:var(--slate);font-size:14px;margin-top:8px;}
+.proc-step:not(:last-child)::after{content:'';position:absolute;top:7px;left:0;width:1px;height:22px;background:var(--taupe);opacity:.8;}
+
+/* WORK */
+.work-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:clamp(18px,2.2vw,26px);}
+.work-card{border:1px solid var(--line);border-radius:4px;overflow:hidden;text-decoration:none;display:flex;flex-direction:column;background:var(--white);transition:border-color .25s,transform .25s;}
+.work-card:hover{border-color:var(--taupe);transform:translateY(-4px);}
+.work-thumb{aspect-ratio:16/10;background:linear-gradient(135deg,var(--taupe-soft),var(--cream));position:relative;display:flex;align-items:center;justify-content:center;}
+.work-thumb .mono{font-size:11px;color:var(--navy-soft);letter-spacing:.14em;opacity:.55;}
+.work-body{padding:20px 22px 24px;}
+.work-body h3{font-size:18px;font-weight:700;}
+.work-body p{color:var(--slate);font-size:13.5px;margin:8px 0 0;}
+.work-tag{display:inline-block;margin-top:12px;font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--taupe);letter-spacing:.1em;}
+
+/* CONTACT */
+#contact{background:var(--navy);color:var(--cream);}
+#contact h2,#contact .eyebrow{color:var(--cream);}
+#contact .eyebrow{color:var(--taupe);}
+.contact-grid{display:grid;grid-template-columns:1fr 1fr;gap:clamp(40px,6vw,80px);}
+.field{margin-bottom:18px;}
+.field label{display:block;font-size:13.5px;color:var(--taupe-soft);margin-bottom:7px;}
+.field input,.field select,.field textarea{width:100%;background:rgba(251,247,240,0.08);border:1px solid rgba(251,247,240,0.22);color:var(--cream);padding:12px 14px;border-radius:3px;font-family:'Tajawal',sans-serif;font-size:14.5px;}
+.field textarea{min-height:110px;resize:vertical;}
+.field input:focus,.field select:focus,.field textarea:focus{outline:none;border-color:var(--taupe);}
+.field select option{color:var(--navy);}
+.submit{width:100%;background:var(--taupe);border:none;color:var(--navy);font-weight:700;padding:14px;border-radius:3px;cursor:pointer;font-family:'Tajawal',sans-serif;font-size:15px;}
+.submit:hover{background:var(--taupe-soft);}
+.contact-info h2{font-size:clamp(28px,3.6vw,40px);font-weight:800;line-height:1.2;}
+.info-row{display:flex;align-items:center;gap:12px;margin-top:22px;color:var(--taupe-soft);font-size:15px;}
+.info-row svg{width:19px;height:19px;color:var(--taupe);flex-shrink:0;}
+
+/* FOOTER */
+footer{border-top:1px solid var(--line);padding:30px 0;background:var(--white);}
+.foot-row{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:16px;}
+.foot-row .logo .word{font-size:16px;}
+.foot-row .logo img{width:30px;height:30px;}
+.foot-links{display:flex;gap:22px;flex-wrap:wrap;}
+.foot-links a{text-decoration:none;color:var(--slate);font-size:13.5px;}
+.foot-links a:hover{color:var(--navy);}
+.copyright{color:var(--slate);font-size:12px;font-family:'IBM Plex Mono',monospace;}
+
+@media(max-width:900px){
+  .about-grid,.contact-grid,.hero-grid{grid-template-columns:1fr;}
+  .hero-mark{order:-1;}
+  .hero-mark img{max-width:220px;}
+  .proc-step:not(:last-child)::after{display:none;}
+}/* MOTION SYSTEM */
+@keyframes heroUp{from{opacity:0;transform:translateY(22px);}to{opacity:1;transform:translateY(0);}}
+.hero-fade{opacity:0;animation:heroUp .8s cubic-bezier(.16,.84,.44,1) forwards;}
+.hero-fade.d1{animation-delay:.05s;}
+.hero-fade.d2{animation-delay:.22s;}
+.hero-fade.d3{animation-delay:.38s;}
+.hero-fade.d4{animation-delay:.55s;}
+
+.hero-mark{opacity:0;animation:heroUp 1s cubic-bezier(.16,.84,.44,1) .3s forwards;}
+.ring-wrap{position:absolute;inset:-22px;pointer-events:none;}
+.ring-wrap svg{width:100%;height:100%;animation:ringSpin 26s linear infinite;}
+@keyframes ringSpin{to{transform:rotate(360deg);}}
+
+.reveal{opacity:0;transform:translateY(28px);transition:opacity .75s cubic-bezier(.16,.84,.44,1),transform .75s cubic-bezier(.16,.84,.44,1);}
+.reveal.visible{opacity:1;transform:translateY(0);}
+.reveal-stagger.visible .stagger-item{opacity:1;transform:translateY(0);}
+.stagger-item{opacity:0;transform:translateY(18px);transition:opacity .6s ease,transform .6s ease;}
+.reveal-stagger.visible .stagger-item:nth-child(1){transition-delay:.02s;}
+.reveal-stagger.visible .stagger-item:nth-child(2){transition-delay:.09s;}
+.reveal-stagger.visible .stagger-item:nth-child(3){transition-delay:.16s;}
+.reveal-stagger.visible .stagger-item:nth-child(4){transition-delay:.23s;}
+.reveal-stagger.visible .stagger-item:nth-child(5){transition-delay:.30s;}
+.reveal-stagger.visible .stagger-item:nth-child(6){transition-delay:.37s;}
+.reveal-stagger.visible .stagger-item:nth-child(7){transition-delay:.44s;}
+.reveal-stagger.visible .stagger-item:nth-child(8){transition-delay:.51s;}
+
+.navlinks a:not(.cta){position:relative;padding-bottom:3px;}
+.navlinks a:not(.cta)::after{content:'';position:absolute;right:0;left:0;bottom:0;height:1px;background:var(--navy);transform:scaleX(0);transform-origin:left;transition:transform .3s ease;}
+.navlinks a:not(.cta):hover::after{transform:scaleX(1);}
+
+.svc-card{transition:background .3s ease,transform .35s cubic-bezier(.16,.84,.44,1),box-shadow .35s ease;}
+.svc-card:hover{transform:translateY(-6px);box-shadow:0 16px 34px rgba(29,58,74,0.12);}
+.svc-icon{transition:transform .35s cubic-bezier(.16,.84,.44,1),color .3s ease;}
+.svc-card:hover .svc-icon{transform:scale(1.12) rotate(-4deg);color:var(--taupe);}
+
+.work-card{transition:border-color .3s ease,transform .4s cubic-bezier(.16,.84,.44,1),box-shadow .4s ease;}
+.work-card:hover{border-color:var(--taupe);transform:translateY(-8px);box-shadow:0 20px 40px rgba(29,58,74,0.14);}
+.work-thumb::after{content:'';position:absolute;inset:0;background:linear-gradient(120deg,transparent 30%,rgba(255,255,255,0.35) 50%,transparent 70%);transform:translateX(-120%);transition:transform .7s ease;}
+.work-card:hover .work-thumb::after{transform:translateX(120%);}
+
+.stat b{display:block;font-family:'Thmanyah Display','Tajawal',serif;font-size:32px;color:var(--navy);}
+.btn-solid,.btn-ghost{transition:transform .25s cubic-bezier(.16,.84,.44,1),box-shadow .25s ease,background .25s ease,color .25s ease;}
+
+@media (prefers-reduced-motion:reduce){
+  .hero-fade,.hero-mark,.reveal,.stagger-item{animation:none !important;transition:none !important;opacity:1 !important;transform:none !important;}
+  .ring-wrap svg{animation:none !important;}
+}
+</style>
+</head>
+<body>
+
+<nav>
+<a href="#hero" class="logo"><img src="assets/logo.jpeg" alt="بصمة"><span class="word">بصمة</span></a>
+<div class="navlinks">
+<a href="#services">خدماتنا</a>
+<a href="#process">كيف نعمل</a>
+<a href="#work">أعمالنا</a>
+<a href="#contact" class="cta">احجز استشارة</a>
+</div>
+</nav>
+
+<!-- HERO -->
+<header id="hero">
+<div class="hero-grid">
+<div>
+<h1 class="hero-fade d1">بصمة<span class="brush">للحلول الرقمية</span></h1>
+<p class="tag hero-fade d2">وكالة تقنية شاملة — نصمم، نبرمج، نسوّق، وننشئ حضورك الرقمي الكامل من فكرة إلى بصمة تُذكر.</p>
+<div class="hero-cta hero-fade d3">
+<a href="#contact" class="btn btn-solid">احجز استشارة مجانية</a>
+<a href="#services" class="btn btn-ghost">شوف خدماتنا</a>
+</div>
+</div>
+<div class="hero-mark">
+<div class="ring-wrap">
+<svg viewBox="0 0 200 200"><circle cx="100" cy="100" r="96" fill="none" stroke="#c9a98d" stroke-width="1.2" stroke-dasharray="2 10" stroke-linecap="round" opacity="0.7"/></svg>
+</div>
+<img src="assets/logo.jpeg" alt="شعار بصمة للحلول الرقمية">
+<div class="fp-scan"></div>
+</div>
+</div>
+</header>
+
+<!-- ABOUT -->
+<section id="about" class="block reveal">
+<div class="wrap about-grid">
+<p class="lead">بصمة مش وكالة تقدملك خدمة وحدة وتخلص. إحنا <strong>شريكك التقني الكامل</strong> — من أول سطر كود بموقعك، لحملة التسويق يلي بتوصلك لعملائك، لهويتك البصرية يلي بتخليك تُعرف من أول نظرة. كل مشروع بناخده متل ما هو مشروعنا احنا.</p>
+<div class="about-stats">
+<div class="stat"><b data-count="8" data-suffix="+">0</b><span>مجالات خدمة متكاملة تحت سقف واحد</span></div>
+<div class="stat"><b data-count="100" data-suffix="%">0</b><span>مشاريع منفذة ومباشرة من الفريق</span></div>
+<div class="stat"><b>مواقع + تسويق + هوية</b><span>حل شامل مش قطع متفرقة</span></div>
+</div>
+</div>
+</section>
+
+<!-- SERVICES -->
+<section id="services" class="block reveal">
+<div class="wrap">
+<div class="block-head">
+<span class="eyebrow">خدماتنا</span>
+<h2>كل شي تكنولوجي، من مكان واحد</h2>
+<p>ما بتحتاج تتعامل مع مصمم وموقع مبرمج ومسوّق منفصلين — بصمة بتغطي الدورة كاملة.</p>
+</div>
+<div class="svc-grid reveal-stagger">
+
+<div class="svc-card stagger-item">
+<svg class="svc-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="14" rx="1.5"/><path d="M2 8h20"/><path d="M8 20h8"/></svg>
+<h3>تطوير مواقع وتطبيقات</h3>
+<p>مواقع ومتاجر ولوحات تحكم مبنية من الصفر، سريعة ومتجاوبة على كل الأجهزة.</p>
+</div>
+
+<div class="svc-card stagger-item">
+<svg class="svc-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l18-7-7 18-3-8-8-3z"/></svg>
+<h3>التسويق الرقمي والنمو</h3>
+<p>حملات إعلانية، تحسين محركات بحث (SEO)، وإدارة منصات التواصل لزيادة عملائك.</p>
+</div>
+
+<div class="svc-card stagger-item">
+<svg class="svc-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18M12 3a9 9 0 0 0 0 18"/></svg>
+<h3>الهوية البصرية</h3>
+<p>شعار، ألوان، وخط بصري متكامل يخلي علامتك التجارية تُعرف من أول لمسة.</p>
+</div>
+
+<div class="svc-card stagger-item">
+<svg class="svc-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v16H4z"/><path d="M4 9h16M9 9v11"/></svg>
+<h3>إدارة محتوى ومنصات</h3>
+<p>كتابة محتوى، إدارة يومية للمنصات، ولوحات تحكم سهلة تدير فيها مشروعك بنفسك.</p>
+</div>
+
+<div class="svc-card stagger-item">
+<svg class="svc-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="15" height="14" rx="1.5"/><path d="m17 9 5-3v12l-5-3"/></svg>
+<h3>مونتاج الفيديو</h3>
+<p>مونتاج احترافي للإعلانات والمحتوى، من القص والتصحيح اللوني لحد المزامنة مع الصوت.</p>
+</div>
+
+<div class="svc-card stagger-item">
+<svg class="svc-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
+<h3>تصميم الجرافيك</h3>
+<p>تصاميم بصرية للمنشورات، المطبوعات، والحملات الإعلانية بلمسة احترافية متسقة.</p>
+</div>
+
+<div class="svc-card stagger-item">
+<svg class="svc-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h7l-1 8 10-12h-7z"/></svg>
+<h3>الموشن جرافيك</h3>
+<p>رسوم متحركة وفيديوهات شرح تحوّل أفكارك المعقدة لمحتوى بصري سهل وجذاب.</p>
+</div>
+
+<div class="svc-card stagger-item">
+<svg class="svc-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/><path d="M9 7h7M9 11h7"/></svg>
+<h3>كتابة المحتوى</h3>
+<p>محتوى مكتوب يوصل صوت علامتك التجارية بوضوح — من نصوص المواقع لخطط المحتوى الكاملة.</p>
+</div>
+
+</div>
+</div>
+</section>
+
+<!-- PROCESS -->
+<section id="process" class="block reveal">
+<div class="wrap">
+<div class="block-head">
+<span class="eyebrow">آلية العمل</span>
+<h2>من الفكرة للإطلاق، بأربع خطوات</h2>
+</div>
+<div class="proc-row reveal-stagger">
+<div class="proc-step stagger-item"><span class="num mono">01</span><h3>الاستكشاف</h3><p>نفهم مشروعك، جمهورك، وأهدافك قبل ما نلمس أي تصميم.</p></div>
+<div class="proc-step stagger-item"><span class="num mono">02</span><h3>التصميم</h3><p>نبني هوية ونموذج تصميم يعكس شخصية مشروعك الحقيقية.</p></div>
+<div class="proc-step stagger-item"><span class="num mono">03</span><h3>التنفيذ</h3><p>برمجة ومحتوى وإعداد كامل، بمراجعات مستمرة معك.</p></div>
+<div class="proc-step stagger-item"><span class="num mono">04</span><h3>الإطلاق والنمو</h3><p>نطلق المشروع ونكمل معك بالتسويق والدعم بعد الإطلاق.</p></div>
+</div>
+</div>
+</section>
+
+<!-- WORK -->
+<section id="work" class="block reveal">
+<div class="wrap">
+<div class="block-head">
+<span class="eyebrow">من أعمالنا</span>
+<h2>مشاريع نفّذناها فعلياً</h2>
+</div>
+<div class="work-grid reveal-stagger">
+
+<a class="work-card stagger-item" href="https://ahmedshawqi.store" target="_blank" rel="noopener">
+<div class="work-thumb"><span class="mono">AHMEDSHAWQI.STORE</span></div>
+<div class="work-body">
+<h3>ahmedshawqi.store</h3>
+<p>موقع بورتفوليو وخدمات متكامل، بتصميم ثنائي اللغة وأرشيف محتوى تفاعلي.</p>
+<span class="work-tag">تطوير مواقع</span>
+</div>
+</a>
+
+<a class="work-card stagger-item" href="https://ahmedshawqi.store/sports.html" target="_blank" rel="noopener">
+<div class="work-thumb"><span class="mono">SPORTS DOCS ARCHIVE</span></div>
+<div class="work-body">
+<h3>أرشيف الوثائقيات الرياضية</h3>
+<p>منصة محتوى بفلترة وبحث تفاعلي لعرض حلقات وثائقية بالفيديو.</p>
+<span class="work-tag">محتوى وتطوير</span>
+</div>
+</a>
+
+<a class="work-card stagger-item" href="https://ahmedshawqi.store/مركز-المباريات.html" target="_blank" rel="noopener">
+<div class="work-thumb"><span class="mono">MATCH CENTER</span></div>
+<div class="work-body">
+<h3>مركز المباريات المباشر</h3>
+<p>صفحة رياضية حية بمؤشرات مباريات، بحث لاعبين، وترتيب دوريات متعددة.</p>
+<span class="work-tag">تطبيق ويب</span>
+</div>
+</a>
+
+</div>
+</div>
+</section>
+
+<!-- CONTACT -->
+<section id="contact" class="block reveal">
+<div class="wrap contact-grid">
+<div class="contact-info">
+<span class="eyebrow">تواصل معنا</span>
+<h2>خلينا نترك بصمتنا على مشروعك</h2>
+<p style="color:var(--taupe-soft);margin-top:16px;max-width:420px;">احكيلنا عن مشروعك، ورح نرجعلك خلال يوم عمل بخطة واضحة وسعر مبدئي.</p>
+<div class="info-row"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg><span>hello@basma.agency</span></div>
+<div class="info-row"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg><span dir="ltr">+970 59 260 8998</span></div>
+</div>
+<form id="basmaForm">
+<div class="field"><label for="bf-name">الاسم الكامل</label><input type="text" id="bf-name" required placeholder="اسمك الكامل"></div>
+<div class="field"><label for="bf-email">البريد الإلكتروني</label><input type="email" id="bf-email" required placeholder="example@email.com"></div>
+<div class="field">
+<label for="bf-service">الخدمة المطلوبة</label>
+<select id="bf-service" required>
+<option value="">اختر نوع الخدمة</option>
+<option>تطوير موقع أو تطبيق</option>
+<option>تسويق رقمي</option>
+<option>هوية بصرية</option>
+<option>إدارة محتوى</option>
+<option>مشروع شامل</option>
+</select>
+</div>
+<div class="field"><label for="bf-msg">تفاصيل المشروع</label><textarea id="bf-msg" required placeholder="احكيلنا عن مشروعك بإيجاز..."></textarea></div>
+<button type="submit" class="submit">إرسال الطلب</button>
+</form>
+</div>
+</section>
+
+<footer>
+<div class="wrap foot-row">
+<a href="#hero" class="logo"><img src="assets/logo.jpeg" alt="بصمة"><span class="word">بصمة</span></a>
+<div class="foot-links">
+<a href="#services">خدماتنا</a>
+<a href="#work">أعمالنا</a>
+<a href="#contact">تواصل</a>
+</div>
+<span class="copyright">© 2026 بصمة للحلول الرقمية</span>
+</div>
+</footer>
+
+<script>
+document.getElementById('basmaForm').addEventListener('submit', function(e){
+  e.preventDefault();
+  var name = document.getElementById('bf-name').value;
+  var service = document.getElementById('bf-service').value;
+  var msg = document.getElementById('bf-msg').value;
+  var email = document.getElementById('bf-email').value;
+  var body = 'الاسم: ' + name + '\n' + 'البريد: ' + email + '\n' + 'الخدمة: ' + service + '\n\n' + msg;
+  window.location.href = 'mailto:basmadigital.ps@gmail.com?subject=' + encodeURIComponent('طلب استشارة من ' + name) + '&body=' + encodeURIComponent(body);
+});
+
+// Scroll reveals
+var revealEls = document.querySelectorAll('.reveal');
+var io = new IntersectionObserver(function(entries){
+  entries.forEach(function(entry){
+    if (entry.isIntersecting) {
+      entry.target.classList.add('visible');
+      io.unobserve(entry.target);
+    }
+  });
+}, { threshold: 0.15 });
+revealEls.forEach(function(el){ io.observe(el); });
+
+// Count-up stats
+var counters = document.querySelectorAll('[data-count]');
+var counted = new WeakSet();
+var cio = new IntersectionObserver(function(entries){
+  entries.forEach(function(entry){
+    if (entry.isIntersecting && !counted.has(entry.target)) {
+      counted.add(entry.target);
+      var el = entry.target;
+      var target = parseInt(el.getAttribute('data-count'), 10);
+      var suffix = el.getAttribute('data-suffix') || '';
+      var start = null;
+      var duration = 1100;
+      function step(ts){
+        if (!start) start = ts;
+        var progress = Math.min((ts - start) / duration, 1);
+        var eased = 1 - Math.pow(1 - progress, 3);
+        el.textContent = Math.round(eased * target) + suffix;
+        if (progress < 1) requestAnimationFrame(step);
+      }
+      requestAnimationFrame(step);
+      cio.unobserve(el);
+    }
+  });
+}, { threshold: 0.4 });
+counters.forEach(function(el){ cio.observe(el); });
+</script>
+
+</body>
+</html>

@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>الاجتماعات | Basma CRM</title>
+<link rel="icon" type="image/png" href="../assets/basma-logo-navbar.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/crm.css">
+</head>
+<body class="crm-body">
+<div class="crm-modal-overlay" id="crmModalOverlay">
+  <div class="crm-modal">
+    <h3 id="crmModalTitle">اجتماع جديد</h3>
+    <form id="crmForm">
+      <input type="hidden" id="fMeetingId" value="">
+      <div class="crm-field"><label for="fTitle">العنوان *</label><input id="fTitle" required></div>
+      <div class="crm-form-grid" style="margin-top:12px">
+        <div class="crm-field"><label for="fType">النوع</label><select id="fType"><option value="call">مكالمة</option><option value="online" selected>عن بعد</option><option value="in_person">حضوري</option></select></div>
+        <div class="crm-field"><label for="fWhen">الموعد *</label><input id="fWhen" type="datetime-local" required></div>
+        <div class="crm-field"><label for="fDuration">المدة (دقيقة)</label><input id="fDuration" type="number" min="5" value="30"></div>
+        <div class="crm-field"><label for="fLead">مرتبط بـ Lead</label><select id="fLead"><option value="">— بدون —</option></select></div>
+        <div class="crm-field"><label for="fLocation">المكان / الرابط</label><input id="fLocation"></div>
+        <div class="crm-field"><label for="fStatus">الحالة</label><select id="fStatus"><option value="scheduled">مجدول</option><option value="completed">منتهٍ</option><option value="cancelled">ملغى</option><option value="rescheduled">أُعيدت جدولته</option></select></div>
+      </div>
+      <div class="crm-field" style="margin-top:12px"><label for="fNotes">ملاحظات</label><textarea id="fNotes"></textarea></div>
+      <div class="crm-form-actions">
+        <button type="button" class="crm-btn" id="crmCancel">إلغاء</button>
+        <button type="submit" class="crm-btn crm-btn-primary">حفظ</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="assets/crm-client.js"></script>
+<script>
+(function () {
+  "use strict";
+  var CRM = window.Basma.CRM;
+  var TYPE_LABELS = { call: "مكالمة", online: "عن بعد", in_person: "حضوري" };
+  var STATUS_LABELS = { scheduled: "مجدول", completed: "منتهٍ", cancelled: "ملغى", rescheduled: "أُعيدت جدولته" };
+  var STATUS_BADGE = { scheduled: "gold", completed: "success", cancelled: "danger", rescheduled: "warning" };
+  var db, who, rows = [], leads = [], members = [], view = "upcoming";
+  var filters = { q: "", status: "", createdBy: "" };
+  var PAGE_SIZE = 25, LOOKUP_CAP = 500, page = 0, totalCount = 0, searchDebounce = null;
+
+  function leadTitle(id) { var l = leads.filter(function (x) { return x.id === id; })[0]; return l ? l.title : null; }
+  function memberName(id) { if (!id) return "—"; var m = members.filter(function (x) { return x.user_id === id; })[0]; return m ? (m.full_name || id.slice(0, 8)) : id.slice(0, 8); }
+
+  function renderPagination() {
+    var el = document.getElementById("crmPagination");
+    if (!el) return;
+    if (!totalCount) { el.innerHTML = ""; return; }
+    var start = totalCount ? page * PAGE_SIZE + 1 : 0;
+    var end = Math.min(totalCount, (page + 1) * PAGE_SIZE);
+    var hasPrev = page > 0, hasNext = end < totalCount;
+    el.innerHTML =
+      '<div class="crm-pagination-controls">' +
+      '<button class="crm-btn crm-btn-sm" id="crmPagePrev"' + (hasPrev ? "" : " disabled") + '>السابق</button>' +
+      '<span class="crm-pagination-page">عرض ' + start + '–' + end + ' من ' + totalCount + '</span>' +
+      '<button class="crm-btn crm-btn-sm" id="crmPageNext"' + (hasNext ? "" : " disabled") + '>التالي</button>' +
+      "</div>";
+    if (hasPrev) document.getElementById("crmPagePrev").addEventListener("click", function () { page -= 1; load(); });
+    if (hasNext) document.getElementById("crmPageNext").addEventListener("click", function () { page += 1; load(); });
+  }
+
+  function render() {
+    var wrap = document.getElementById("crmTableWrap"), empty = document.getElementById("crmEmpty");
+    if (!rows.length) { wrap.style.display = "none"; empty.style.display = "block"; renderPagination(); return; }
+    wrap.style.display = "block"; empty.style.display = "none";
+
+    document.getElementById("crmTableBody").innerHTML = rows.map(function (m) {
+      var linked = leadTitle(m.lead_id);
+      return "<tr><td>" + CRM.escape(m.title) + (linked ? '<div class="crm-muted" style="font-size:11px">' + CRM.escape(linked) + "</div>" : "") + "</td>" +
+        "<td>" + (TYPE_LABELS[m.meeting_type] || m.meeting_type || "—") + "</td>" +
+        "<td>" + CRM.formatDateTime(m.scheduled_at) + "</td>" +
+        "<td>" + m.duration_minutes + " د</td>" +
+        "<td>" + CRM.escape(m.location_or_link || "—") + "</td>" +
+        "<td><span class=\"crm-badge crm-badge-" + (STATUS_BADGE[m.status] || "mute") + "\">" + (STATUS_LABELS[m.status] || m.status) + "</span></td>" +
+        "<td style=\"white-space:nowrap;display:flex;gap:6px\">" +
+        (who.can_write ? "<button class=\"crm-btn crm-btn-sm crm-edit-btn\" data-id=\"" + m.id + "\">تعديل</button>" : "") +
+        (who.is_admin ? "<button class=\"crm-btn crm-btn-sm crm-btn-danger crm-delete-btn\" data-id=\"" + m.id + "\">حذف</button>" : "") +
+        "</td></tr>";
+    }).join("");
+
+    document.querySelectorAll(".crm-edit-btn").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var m = rows.filter(function (x) { return x.id === btn.dataset.id; })[0];
+        if (m) openModal(m);
+      });
+    });
+    document.querySelectorAll(".crm-delete-btn").forEach(function (btn) {
+      btn.addEventListener("click", function () { deleteMeeting(btn.dataset.id); });
+    });
+    renderPagination();
+  }
+
+  function openModal(meeting) {
+    document.getElementById("crmModalTitle").textContent = meeting ? "تعديل الاجتماع" : "اجتماع جديد";
+    document.getElementById("fMeetingId").value = meeting ? meeting.id : "";
+    document.getElementById("fTitle").value = meeting ? meeting.title : "";
+    document.getElementById("fType").value = (meeting && meeting.meeting_type) || "online";
+    document.getElementById("fWhen").value = meeting && meeting.scheduled_at ? meeting.scheduled_at.slice(0, 16) : "";
+    document.getElementById("fDuration").value = meeting ? meeting.duration_minutes : 30;
+    document.getElementById("fLead").value = (meeting && meeting.lead_id) || "";
+    document.getElementById("fLocation").value = (meeting && meeting.location_or_link) || "";
+    document.getElementById("fStatus").value = (meeting && meeting.status) || "scheduled";
+    document.getElementById("fNotes").value = (meeting && meeting.notes) || "";
+    document.getElementById("crmModalOverlay").classList.add("is-open");
+  }
+
+  async function deleteMeeting(id) {
+    if (!CRM.confirm("حذف هذا الاجتماع نهائيًا؟ هذا الإجراء لا يمكن التراجع عنه.")) return;
+    try {
+      var res = await db.from("crm_meetings").delete().eq("id", id);
+      if (res.error) throw res.error;
+      CRM.toast("تم الحذف.", "info");
+      await load();
+    } catch (err) { CRM.toast("تعذّر الحذف: " + (err.message || ""), "danger"); }
+  }
+
+  async function save(event) {
+    event.preventDefault();
+    if (!document.getElementById("fWhen").value) { CRM.toast("حدّد الموعد.", "danger"); return; }
+    var editingId = document.getElementById("fMeetingId").value || null;
+    var payload = {
+      title: document.getElementById("fTitle").value.trim(),
+      meeting_type: document.getElementById("fType").value,
+      scheduled_at: new Date(document.getElementById("fWhen").value).toISOString(),
+      duration_minutes: Number(document.getElementById("fDuration").value || 30),
+      lead_id: document.getElementById("fLead").value || null,
+      location_or_link: document.getElementById("fLocation").value.trim() || null,
+      status: document.getElementById("fStatus").value,
+      notes: document.getElementById("fNotes").value.trim() || null
+    };
+    try {
+      if (editingId) {
+        var res = await db.from("crm_meetings").update(payload).eq("id", editingId);
+        if (res.error) throw res.error;
+        CRM.toast("تم تحديث الاجتماع.", "info");
+      } else {
+        var res2 = await db.from("crm_meetings").insert(payload);
+        if (res2.error) throw res2.error;
+        CRM.toast("تم جدولة الاجتماع.", "info");
+      }
+      document.getElementById("crmModalOverlay").classList.remove("is-open");
+      await load();
+    } catch (err) { CRM.toast("تعذّر الحفظ: " + (err.message || ""), "danger"); }
+  }
+
+  function resetAndReload() { page = 0; load(); }
+
+  async function load() {
+    var now = new Date().toISOString();
+    var q = filters.q.trim().replace(/[,()]/g, " ").replace(/\s+/g, " ").trim();
+    try {
+      var query = db.from("crm_meetings").select("*", { count: "exact" });
+      query = view === "upcoming" ? query.gte("scheduled_at", now) : query.lt("scheduled_at", now);
+      if (filters.status) query = query.eq("status", filters.status);
+      if (filters.createdBy) query = query.eq("created_by", filters.createdBy);
+      if (q) {
+        var matchIds = [];
+        try {
+          var leadMatches = await db.from("crm_leads").select("id").ilike("title", "%" + q + "%").limit(200);
+          (leadMatches.data || []).forEach(function (l) { matchIds.push(l.id); });
+        } catch (e) { /* non-fatal */ }
+        var orParts = ["title.ilike.%" + q + "%", "location_or_link.ilike.%" + q + "%"];
+        if (matchIds.length) orParts.push("lead_id.in.(" + matchIds.join(",") + ")");
+        query = query.or(orParts.join(","));
+      }
+      query = query.order("scheduled_at", { ascending: view === "upcoming" }).range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1);
+      var res = await query;
+      if (res.error) throw res.error;
+      rows = res.data || [];
+      totalCount = res.count || 0;
+      render();
+    } catch (err) { CRM.toast("تعذّر التحميل: " + (err.message || ""), "danger"); }
+  }
+
+  async function boot() {
+    var ctx = await CRM.boot({ activeKey: "meetings", title: "الاجتماعات", sub: "" });
+    if (!ctx) return;
+    db = ctx.client; who = ctx.who;
+    document.getElementById("crmTopbarActions").innerHTML = who.can_write ? '<button class="crm-btn crm-btn-primary" id="crmAdd">+ جدولة اجتماع</button>' : "";
+
+    document.getElementById("crmApp").innerHTML =
+      '<div class="crm-alert crm-alert-info">Google Calendar integration — مرحلة مستقبلية. حاليًا يتم إدخال الاجتماعات وحفظها يدويًا داخل Basma CRM فقط.</div>' +
+      '<div class="crm-card"><div style="display:flex;gap:8px;margin-bottom:14px">' +
+      '<button class="crm-btn is-active" id="tabUpcoming" style="background:var(--crm-gold-soft)">القادمة</button>' +
+      '<button class="crm-btn" id="tabPast">السابقة</button>' +
+      "</div>" +
+      '<div class="crm-filters">' +
+      '<div class="crm-field" style="min-width:200px"><label>بحث</label><input id="fvSearch" placeholder="العنوان، Lead، أو المكان"></div>' +
+      '<div class="crm-field"><label>الحالة</label><select id="fvStatus"><option value="">الكل</option>' + Object.keys(STATUS_LABELS).map(function (s) { return '<option value="' + s + '">' + STATUS_LABELS[s] + "</option>"; }).join("") + "</select></div>" +
+      '<div class="crm-field"><label>مسؤول الجدولة</label><select id="fvCreatedBy"><option value="">الكل</option></select></div>' +
+      "</div></div>" +
+      '<div class="crm-table-wrap" id="crmTableWrap"><table class="crm-table"><thead><tr><th>العنوان</th><th>النوع</th><th>الموعد</th><th>المدة</th><th>المكان/الرابط</th><th>الحالة</th><th>الإجراءات</th></tr></thead><tbody id="crmTableBody"></tbody></table></div>' +
+      '<div class="crm-pagination" id="crmPagination"></div>' +
+      '<div class="crm-card crm-empty" id="crmEmpty" style="display:none"><h2 style="color:#fbf7f0">لا توجد اجتماعات</h2><p>جدول أول اجتماع لتظهر هنا.</p></div>';
+
+    document.getElementById("tabUpcoming").addEventListener("click", function () { view = "upcoming"; this.style.background = "var(--crm-gold-soft)"; document.getElementById("tabPast").style.background = "transparent"; resetAndReload(); });
+    document.getElementById("tabPast").addEventListener("click", function () { view = "past"; this.style.background = "var(--crm-gold-soft)"; document.getElementById("tabUpcoming").style.background = "transparent"; resetAndReload(); });
+
+    if (who.can_write) {
+      document.getElementById("crmAdd").addEventListener("click", function () { openModal(null); });
+      document.getElementById("crmCancel").addEventListener("click", function () { document.getElementById("crmModalOverlay").classList.remove("is-open"); });
+      document.getElementById("crmForm").addEventListener("submit", save);
+    }
+
+    document.getElementById("fvSearch").addEventListener("input", function (e) {
+      filters.q = e.target.value || "";
+      clearTimeout(searchDebounce);
+      searchDebounce = setTimeout(resetAndReload, 350);
+    });
+    document.getElementById("fvStatus").addEventListener("change", function (e) { filters.status = e.target.value; resetAndReload(); });
+    document.getElementById("fvCreatedBy").addEventListener("change", function (e) { filters.createdBy = e.target.value; resetAndReload(); });
+
+    var leadsRes = await db.from("crm_leads").select("id,title").order("created_at", { ascending: false }).limit(LOOKUP_CAP);
+    leads = leadsRes.data || [];
+    var sel = document.getElementById("fLead");
+    if (sel) sel.innerHTML = '<option value="">— بدون —</option>' + leads.map(function (l) { return '<option value="' + l.id + '">' + CRM.escape(l.title) + "</option>"; }).join("");
+
+    var membersRes = await db.from("crm_members").select("user_id,full_name").eq("is_active", true);
+    members = membersRes.data || [];
+    document.getElementById("fvCreatedBy").innerHTML = '<option value="">الكل</option>' + members.map(function (m) { return '<option value="' + m.user_id + '">' + CRM.escape(m.full_name || m.user_id.slice(0, 8)) + "</option>"; }).join("");
+
+    await load();
+  }
+
+  boot();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>الإعدادات والفريق | Basma CRM</title>
+<link rel="icon" type="image/png" href="../assets/basma-logo-navbar.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/crm.css">
+</head>
+<body class="crm-body">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="assets/crm-client.js"></script>
+<script>
+(function () {
+  "use strict";
+  var CRM = window.Basma.CRM;
+  var ROLE_LABELS = { admin: "مدير", sales: "مبيعات", manager: "مدير فريق", viewer: "عرض فقط" };
+  var db, members = [];
+
+  function render() {
+    var body = document.getElementById("crmTableBody");
+    var myId = (CRM.state.session && CRM.state.session.user && CRM.state.session.user.id) || null;
+    body.innerHTML = members.map(function (m) {
+      var isSelf = myId && m.user_id === myId;
+      return "<tr><td dir=\"ltr\" style=\"text-align:end;font-size:11.5px\">" + m.user_id + (isSelf ? ' <span class="crm-badge crm-badge-gold" style="margin-inline-start:4px">أنت</span>' : "") + "</td>" +
+        "<td>" + CRM.escape(m.full_name || "—") + "</td>" +
+        "<td><select class=\"crm-role-select\" data-id=\"" + m.user_id + "\" " + (isSelf ? "disabled title=\"لا يمكنك تغيير دورك الخاص\"" : "") + " style=\"background:var(--crm-panel-2);color:var(--crm-text);border:1px solid var(--crm-border);border-radius:8px;padding:6px 8px;font-size:12px\">" +
+        Object.keys(ROLE_LABELS).map(function (r) { return '<option value="' + r + '"' + (r === m.role ? " selected" : "") + ">" + ROLE_LABELS[r] + "</option>"; }).join("") + "</select></td>" +
+        "<td><input type=\"checkbox\" class=\"crm-active-box\" data-id=\"" + m.user_id + "\" " + (m.is_active ? "checked" : "") + " " + (isSelf ? "disabled title=\"لا يمكنك تعطيل حسابك الخاص\"" : "") + " style=\"width:18px;height:18px;min-height:auto\"></td>" +
+        "<td>" + CRM.formatDate(m.created_at) + "</td>" +
+        "<td>" + (isSelf ? '<span class="crm-muted" style="font-size:11.5px">لا يمكن إزالة نفسك</span>' : '<button class="crm-btn crm-btn-sm crm-btn-danger crm-remove" data-id="' + m.user_id + '">إزالة</button>') + "</td></tr>";
+    }).join("");
+
+    body.querySelectorAll(".crm-role-select").forEach(function (sel) {
+      sel.addEventListener("change", async function () {
+        if (myId && sel.dataset.id === myId) { CRM.toast("لا يمكنك تغيير دورك الخاص.", "danger"); await load(); return; }
+        try {
+          var res = await db.from("crm_members").update({ role: sel.value }).eq("user_id", sel.dataset.id);
+          if (res.error) throw res.error;
+          CRM.toast("تم تحديث الدور.", "info");
+        } catch (err) { CRM.toast("تعذّر التحديث: " + (err.message || ""), "danger"); }
+      });
+    });
+    body.querySelectorAll(".crm-active-box").forEach(function (cb) {
+      cb.addEventListener("change", async function () {
+        if (myId && cb.dataset.id === myId) { CRM.toast("لا يمكنك تعطيل حسابك الخاص.", "danger"); await load(); return; }
+        try {
+          var res = await db.from("crm_members").update({ is_active: cb.checked }).eq("user_id", cb.dataset.id);
+          if (res.error) throw res.error;
+          CRM.toast(cb.checked ? "تم تفعيل الحساب." : "تم تعطيل الحساب.", "info");
+        } catch (err) { CRM.toast("تعذّر التحديث: " + (err.message || ""), "danger"); }
+      });
+    });
+    body.querySelectorAll(".crm-remove").forEach(function (btn) {
+      btn.addEventListener("click", async function () {
+        if (myId && btn.dataset.id === myId) { CRM.toast("لا يمكنك إزالة نفسك.", "danger"); return; }
+        if (!CRM.confirm("إزالة هذا العضو من فريق Basma CRM؟ لن يعد بإمكانه الوصول للنظام.")) return;
+        try {
+          var res = await db.from("crm_members").delete().eq("user_id", btn.dataset.id);
+          if (res.error) throw res.error;
+          CRM.toast("تمت الإزالة.", "info");
+          await load();
+        } catch (err) { CRM.toast("تعذّر الحذف: " + (err.message || ""), "danger"); }
+      });
+    });
+  }
+
+  async function load() {
+    var res = await db.from("crm_members").select("*").order("created_at");
+    if (res.error) { CRM.toast("تعذّر التحميل: " + res.error.message, "danger"); return; }
+    members = res.data || [];
+    render();
+  }
+
+  async function addMember(event) {
+    event.preventDefault();
+    var userId = document.getElementById("fUserId").value.trim();
+    var fullName = document.getElementById("fFullName").value.trim();
+    var role = document.getElementById("fRole").value;
+    if (!userId) { CRM.toast("أدخل User ID صالح (UUID) من لوحة Supabase.", "danger"); return; }
+    try {
+      var res = await db.from("crm_members").insert({ user_id: userId, full_name: fullName || null, role: role, is_active: true });
+      if (res.error) throw res.error;
+      CRM.toast("تمت إضافة العضو.", "info");
+      document.getElementById("crmAddForm").reset();
+      await load();
+    } catch (err) { CRM.toast("تعذّر الإضافة: " + (err.message || "تأكد أن الـ User ID صحيح وغير مكرر"), "danger"); }
+  }
+
+  async function boot() {
+    var ctx = await CRM.boot({ activeKey: "settings", title: "الإعدادات والفريق", sub: "إدارة صلاحيات فريق Basma CRM — للمدراء فقط", minRole: "admin" });
+    if (!ctx) return;
+    db = ctx.client;
+
+    document.getElementById("crmApp").innerHTML =
+      '<div class="crm-alert crm-alert-info">لإضافة موظف جديد: أنشئ له حسابًا أولًا من لوحة Supabase (Authentication → Users → Invite/Add user)، ثم انسخ الـ User UID من هناك والصقه هنا مع تحديد الدور.</div>' +
+      '<div class="crm-card"><div class="crm-section-title"><h2>إضافة عضو فريق</h2></div>' +
+      '<form id="crmAddForm" class="crm-form-grid">' +
+      '<div class="crm-field"><label for="fUserId">User ID (UUID) *</label><input id="fUserId" placeholder="00000000-0000-0000-0000-000000000000" dir="ltr" required></div>' +
+      '<div class="crm-field"><label for="fFullName">الاسم الكامل</label><input id="fFullName"></div>' +
+      '<div class="crm-field"><label for="fRole">الدور</label><select id="fRole"><option value="viewer">عرض فقط</option><option value="sales" selected>مبيعات</option><option value="manager">مدير فريق</option><option value="admin">مدير</option></select></div>' +
+      "</form>" +
+      '<div class="crm-form-actions"><button type="submit" form="crmAddForm" class="crm-btn crm-btn-primary">إضافة</button></div>' +
+      "</div>" +
+      '<div class="crm-table-wrap"><table class="crm-table"><thead><tr><th>User ID</th><th>الاسم</th><th>الدور</th><th>مفعّل</th><th>أُضيف في</th><th>الإجراءات</th></tr></thead><tbody id="crmTableBody"></tbody></table></div>';
+
+    document.getElementById("crmAddForm").addEventListener("submit", addMember);
+    await load();
+  }
+
+  boot();
+})();
+</script>
+</body>
+</html>

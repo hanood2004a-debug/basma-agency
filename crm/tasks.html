@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>المهام | Basma CRM</title>
+<link rel="icon" type="image/png" href="../assets/basma-logo-navbar.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/crm.css">
+</head>
+<body class="crm-body">
+<div class="crm-modal-overlay" id="crmModalOverlay">
+  <div class="crm-modal">
+    <h3 id="crmModalTitle">مهمة جديدة</h3>
+    <form id="crmForm">
+      <input type="hidden" id="fTaskId" value="">
+      <div class="crm-field"><label for="fTitle">العنوان *</label><input id="fTitle" required></div>
+      <div class="crm-form-grid" style="margin-top:12px">
+        <div class="crm-field"><label for="fPriority">الأولوية</label><select id="fPriority"><option value="low">منخفضة</option><option value="medium" selected>متوسطة</option><option value="high">عالية</option><option value="urgent">عاجلة</option></select></div>
+        <div class="crm-field"><label for="fDue">تاريخ الاستحقاق</label><input id="fDue" type="datetime-local"></div>
+        <div class="crm-field"><label for="fLead">مرتبطة بـ Lead</label><select id="fLead"><option value="">— بدون —</option></select></div>
+        <div class="crm-field"><label for="fAssigned">المسؤول</label><select id="fAssigned"><option value="">— غير محدد —</option></select></div>
+        <div class="crm-field" id="fStatusWrap" style="display:none"><label for="fStatus">الحالة</label><select id="fStatus"><option value="pending">قيد الانتظار</option><option value="in_progress">قيد التنفيذ</option><option value="completed">مكتملة</option><option value="cancelled">ملغاة</option></select></div>
+      </div>
+      <div class="crm-field" style="margin-top:12px"><label for="fDesc">الوصف</label><textarea id="fDesc"></textarea></div>
+      <div class="crm-form-actions">
+        <button type="button" class="crm-btn" id="crmCancel">إلغاء</button>
+        <button type="submit" class="crm-btn crm-btn-primary">حفظ</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="assets/crm-client.js"></script>
+<script>
+(function () {
+  "use strict";
+  var CRM = window.Basma.CRM;
+  var db, who, tasks = [], leads = [], members = [], currentView = "today", currentAssigned = "", currentPriority = "", currentSearch = "";
+  var PRIORITY_LABELS = { low: "منخفضة", medium: "متوسطة", high: "عالية", urgent: "عاجلة" };
+  var STATUS_LABELS = { pending: "قيد الانتظار", in_progress: "قيد التنفيذ", completed: "مكتملة", cancelled: "ملغاة" };
+  var PAGE_SIZE = 25, LOOKUP_CAP = 500, page = 0, totalCount = 0, searchDebounce = null;
+  var viewCounts = { today: 0, overdue: 0, upcoming: 0, completed: 0 };
+
+  function leadTitle(id) { var l = leads.filter(function (x) { return x.id === id; })[0]; return l ? l.title : null; }
+  function memberName(id) { if (!id) return "—"; var m = members.filter(function (x) { return x.user_id === id; })[0]; return m ? (m.full_name || id.slice(0, 8)) : id.slice(0, 8); }
+  function isOverdue(t) { return t.due_at && new Date(t.due_at) < new Date() && t.status !== "completed" && t.status !== "cancelled"; }
+
+  function applyViewFilters(query, view) {
+    var nowIso = new Date().toISOString();
+    var todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+    var todayEnd = new Date(); todayEnd.setHours(23, 59, 59, 999);
+    if (view === "today") {
+      return query.gte("due_at", todayStart.toISOString()).lte("due_at", todayEnd.toISOString()).not("status", "in", "(completed,cancelled)");
+    }
+    if (view === "overdue") {
+      return query.lt("due_at", nowIso).not("status", "in", "(completed,cancelled)");
+    }
+    if (view === "upcoming") {
+      return query.gt("due_at", todayEnd.toISOString()).not("status", "in", "(completed,cancelled)");
+    }
+    if (view === "completed") {
+      return query.eq("status", "completed");
+    }
+    return query;
+  }
+  function applyCommonFilters(query, assigned, priority, q) {
+    if (assigned) query = query.eq("assigned_to", assigned);
+    if (priority) query = query.eq("priority", priority);
+    if (q) query = query.or("title.ilike.%" + q + "%,description.ilike.%" + q + "%");
+    return query;
+  }
+
+  async function toggleComplete(id, complete) {
+    try {
+      var res = await db.from("crm_tasks").update({ status: complete ? "completed" : "pending", completed_at: complete ? new Date().toISOString() : null }).eq("id", id);
+      if (res.error) throw res.error;
+      await load();
+      CRM.toast(complete ? "تم إنهاء المهمة." : "تمت إعادة فتح المهمة.", "info");
+    } catch (err) { CRM.toast("تعذّر التحديث: " + (err.message || ""), "danger"); }
+  }
+
+  async function deleteTask(id) {
+    if (!CRM.confirm("حذف هذه المهمة نهائيًا؟ هذا الإجراء لا يمكن التراجع عنه.")) return;
+    try {
+      var res = await db.from("crm_tasks").delete().eq("id", id);
+      if (res.error) throw res.error;
+      CRM.toast("تم الحذف.", "info");
+      await load();
+    } catch (err) { CRM.toast("تعذّر الحذف: " + (err.message || ""), "danger"); }
+  }
+
+  function openModal(task) {
+    document.getElementById("crmModalTitle").textContent = task ? "تعديل المهمة" : "مهمة جديدة";
+    document.getElementById("fTaskId").value = task ? task.id : "";
+    document.getElementById("fTitle").value = task ? task.title : "";
+    document.getElementById("fPriority").value = (task && task.priority) || "medium";
+    document.getElementById("fDue").value = task && task.due_at ? task.due_at.slice(0, 16) : "";
+    document.getElementById("fLead").value = (task && task.lead_id) || "";
+    document.getElementById("fAssigned").value = (task && task.assigned_to) || "";
+    document.getElementById("fDesc").value = (task && task.description) || "";
+    document.getElementById("fStatusWrap").style.display = task ? "block" : "none";
+    if (task) document.getElementById("fStatus").value = task.status || "pending";
+    document.getElementById("crmModalOverlay").classList.add("is-open");
+  }
+
+  function renderPagination() {
+    var el = document.getElementById("crmPagination");
+    if (!el) return;
+    if (!totalCount) { el.innerHTML = ""; return; }
+    var start = totalCount ? page * PAGE_SIZE + 1 : 0;
+    var end = Math.min(totalCount, (page + 1) * PAGE_SIZE);
+    var hasPrev = page > 0, hasNext = end < totalCount;
+    el.innerHTML =
+      '<div class="crm-pagination-controls">' +
+      '<button class="crm-btn crm-btn-sm" id="crmPagePrev"' + (hasPrev ? "" : " disabled") + '>السابق</button>' +
+      '<span class="crm-pagination-page">عرض ' + start + '–' + end + ' من ' + totalCount + '</span>' +
+      '<button class="crm-btn crm-btn-sm" id="crmPageNext"' + (hasNext ? "" : " disabled") + '>التالي</button>' +
+      "</div>";
+    if (hasPrev) document.getElementById("crmPagePrev").addEventListener("click", function () { page -= 1; load(); });
+    if (hasNext) document.getElementById("crmPageNext").addEventListener("click", function () { page += 1; load(); });
+  }
+
+  function render() {
+    document.querySelectorAll(".crm-view-tab").forEach(function (btn) {
+      btn.classList.toggle("is-active", btn.dataset.view === currentView);
+      var label = btn.dataset.label;
+      btn.textContent = label + " (" + (viewCounts[btn.dataset.view] || 0) + ")";
+    });
+
+    var wrap = document.getElementById("crmTableWrap"), empty = document.getElementById("crmEmpty");
+    if (!tasks.length) { wrap.style.display = "none"; empty.style.display = "block"; renderPagination(); return; }
+    wrap.style.display = "block"; empty.style.display = "none";
+
+    document.getElementById("crmTableBody").innerHTML = tasks.map(function (t) {
+      var overdue = isOverdue(t);
+      var linked = leadTitle(t.lead_id);
+      return "<tr>" +
+        "<td>" + (who.can_write ? "<input type=\"checkbox\" data-id=\"" + t.id + "\" class=\"crm-complete-box\" " + (t.status === "completed" ? "checked" : "") + " style=\"width:18px;height:18px;min-height:auto\">" : (t.status === "completed" ? "✓" : "")) + "</td>" +
+        "<td>" + CRM.escape(t.title) + (linked ? '<div class="crm-muted" style="font-size:11px">' + CRM.escape(linked) + "</div>" : "") + "</td>" +
+        "<td><span class=\"crm-badge crm-badge-gold\">" + (PRIORITY_LABELS[t.priority] || t.priority) + "</span></td>" +
+        "<td>" + (overdue ? '<span class="crm-badge crm-badge-danger">متأخرة</span> ' : "") + CRM.formatDateTime(t.due_at) + "</td>" +
+        "<td>" + CRM.escape(memberName(t.assigned_to)) + "</td>" +
+        "<td>" + (STATUS_LABELS[t.status] || t.status) + "</td>" +
+        "<td style=\"white-space:nowrap;display:flex;gap:6px\">" +
+        (who.can_write ? "<button class=\"crm-btn crm-btn-sm crm-edit-btn\" data-id=\"" + t.id + "\">تعديل</button>" : "") +
+        (who.is_admin ? "<button class=\"crm-btn crm-btn-sm crm-btn-danger crm-delete-btn\" data-id=\"" + t.id + "\">حذف</button>" : "") +
+        "</td>" +
+        "</tr>";
+    }).join("");
+
+    document.querySelectorAll(".crm-complete-box").forEach(function (cb) {
+      cb.addEventListener("change", function () { toggleComplete(cb.dataset.id, cb.checked); });
+    });
+    document.querySelectorAll(".crm-edit-btn").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var t = tasks.filter(function (x) { return x.id === btn.dataset.id; })[0];
+        if (t) openModal(t);
+      });
+    });
+    document.querySelectorAll(".crm-delete-btn").forEach(function (btn) {
+      btn.addEventListener("click", function () { deleteTask(btn.dataset.id); });
+    });
+    renderPagination();
+  }
+
+  async function save(event) {
+    event.preventDefault();
+    var editingId = document.getElementById("fTaskId").value || null;
+    var payload = {
+      title: document.getElementById("fTitle").value.trim(),
+      priority: document.getElementById("fPriority").value,
+      due_at: document.getElementById("fDue").value || null,
+      lead_id: document.getElementById("fLead").value || null,
+      assigned_to: document.getElementById("fAssigned").value || null,
+      description: document.getElementById("fDesc").value.trim() || null
+    };
+    if (!payload.title) { CRM.toast("عنوان المهمة مطلوب.", "danger"); return; }
+    try {
+      if (editingId) {
+        var newStatus = document.getElementById("fStatus").value;
+        payload.status = newStatus;
+        var existing = tasks.filter(function (t) { return t.id === editingId; })[0];
+        if (newStatus === "completed" && (!existing || existing.status !== "completed")) payload.completed_at = new Date().toISOString();
+        if (newStatus !== "completed") payload.completed_at = null;
+        var res = await db.from("crm_tasks").update(payload).eq("id", editingId);
+        if (res.error) throw res.error;
+        CRM.toast("تم تحديث المهمة.", "info");
+      } else {
+        var res2 = await db.from("crm_tasks").insert(payload);
+        if (res2.error) throw res2.error;
+        CRM.toast("تم إنشاء المهمة.", "info");
+      }
+      document.getElementById("crmModalOverlay").classList.remove("is-open");
+      await load();
+    } catch (err) { CRM.toast("تعذّر الحفظ: " + (err.message || ""), "danger"); }
+  }
+
+  function resetAndReload() { page = 0; load(); }
+
+  async function loadCounts(q) {
+    var views = ["today", "overdue", "upcoming", "completed"];
+    await Promise.all(views.map(async function (v) {
+      try {
+        var cq = db.from("crm_tasks").select("*", { count: "exact", head: true });
+        cq = applyViewFilters(cq, v);
+        cq = applyCommonFilters(cq, currentAssigned, currentPriority, q);
+        var r = await cq;
+        viewCounts[v] = r.count || 0;
+      } catch (e) { viewCounts[v] = viewCounts[v] || 0; }
+    }));
+  }
+
+  async function load() {
+    var q = currentSearch.trim().replace(/[,()]/g, " ").replace(/\s+/g, " ").trim();
+    try {
+      var query = db.from("crm_tasks").select("*", { count: "exact" });
+      query = applyViewFilters(query, currentView);
+      query = applyCommonFilters(query, currentAssigned, currentPriority, q);
+      query = query.order("due_at", { ascending: true, nullsFirst: false }).range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1);
+      var res = await query;
+      if (res.error) throw res.error;
+      tasks = res.data || [];
+      totalCount = res.count || 0;
+      await loadCounts(q);
+      render();
+    } catch (err) { CRM.toast("تعذّر التحميل: " + (err.message || ""), "danger"); }
+  }
+
+  async function boot() {
+    var ctx = await CRM.boot({ activeKey: "tasks", title: "المهام", sub: "تابع كل ما يستحق إنجازه اليوم وغدًا" });
+    if (!ctx) return;
+    db = ctx.client; who = ctx.who;
+    document.getElementById("crmTopbarActions").innerHTML = who.can_write ? '<button class="crm-btn crm-btn-primary" id="crmAdd">+ إنشاء مهمة</button>' : "";
+
+    document.getElementById("crmApp").innerHTML =
+      '<div class="crm-card">' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">' +
+      '<button class="crm-btn crm-view-tab is-active" data-view="today" data-label="اليوم">اليوم</button>' +
+      '<button class="crm-btn crm-view-tab" data-view="overdue" data-label="المتأخرة">المتأخرة</button>' +
+      '<button class="crm-btn crm-view-tab" data-view="upcoming" data-label="القادمة">القادمة</button>' +
+      '<button class="crm-btn crm-view-tab" data-view="completed" data-label="المكتملة">المكتملة</button>' +
+      "</div>" +
+      '<div class="crm-filters">' +
+      '<div class="crm-field" style="min-width:200px"><label>بحث</label><input id="fvSearch" placeholder="العنوان أو الوصف"></div>' +
+      '<div class="crm-field"><label>المسؤول</label><select id="fvAssigned"><option value="">الكل</option></select></div>' +
+      '<div class="crm-field"><label>الأولوية</label><select id="fvPriority"><option value="">الكل</option>' + Object.keys(PRIORITY_LABELS).map(function (p) { return '<option value="' + p + '">' + PRIORITY_LABELS[p] + "</option>"; }).join("") + '</select></div>' +
+      "</div></div>" +
+      '<div class="crm-table-wrap" id="crmTableWrap"><table class="crm-table"><thead><tr><th></th><th>العنوان</th><th>الأولوية</th><th>الاستحقاق</th><th>المسؤول</th><th>الحالة</th><th>الإجراءات</th></tr></thead><tbody id="crmTableBody"></tbody></table></div>' +
+      '<div class="crm-pagination" id="crmPagination"></div>' +
+      '<div class="crm-card crm-empty" id="crmEmpty" style="display:none"><h2 style="color:#fbf7f0">لا توجد مهام هنا</h2><p>جرّب عرضًا آخر أو أضف مهمة جديدة.</p></div>';
+
+    document.querySelectorAll(".crm-view-tab").forEach(function (btn) {
+      btn.addEventListener("click", function () { currentView = btn.dataset.view; resetAndReload(); });
+    });
+    document.getElementById("fvAssigned").addEventListener("change", function (e) { currentAssigned = e.target.value; resetAndReload(); });
+    document.getElementById("fvPriority").addEventListener("change", function (e) { currentPriority = e.target.value; resetAndReload(); });
+    document.getElementById("fvSearch").addEventListener("input", function (e) {
+      currentSearch = e.target.value || "";
+      clearTimeout(searchDebounce);
+      searchDebounce = setTimeout(resetAndReload, 350);
+    });
+
+    if (who.can_write) {
+      document.getElementById("crmAdd").addEventListener("click", function () { openModal(null); });
+      document.getElementById("crmCancel").addEventListener("click", function () { document.getElementById("crmModalOverlay").classList.remove("is-open"); });
+      document.getElementById("crmForm").addEventListener("submit", save);
+    }
+
+    try {
+      var leadsRes = await db.from("crm_leads").select("id,title").order("created_at", { ascending: false }).limit(LOOKUP_CAP);
+      leads = leadsRes.data || [];
+      var membersRes = await db.from("crm_members").select("user_id,full_name").eq("is_active", true);
+      members = membersRes.data || [];
+      var leadSel = document.getElementById("fLead");
+      if (leadSel) leadSel.innerHTML = '<option value="">— بدون —</option>' + leads.map(function (l) { return '<option value="' + l.id + '">' + CRM.escape(l.title) + "</option>"; }).join("");
+      var opts = '<option value="">الكل</option>' + members.map(function (m) { return '<option value="' + m.user_id + '">' + CRM.escape(m.full_name || m.user_id.slice(0, 8)) + "</option>"; }).join("");
+      document.getElementById("fvAssigned").innerHTML = opts;
+      var fAssignedSel = document.getElementById("fAssigned");
+      if (fAssignedSel) fAssignedSel.innerHTML = '<option value="">— غير محدد —</option>' + members.map(function (m) { return '<option value="' + m.user_id + '">' + CRM.escape(m.full_name || m.user_id.slice(0, 8)) + "</option>"; }).join("");
+    } catch (err) { /* non-fatal */ }
+
+    await load();
+  }
+
+  boot();
+})();
+</script>
+</body>
+</html>

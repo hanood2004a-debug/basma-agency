@@ -1,0 +1,18 @@
+{
+  "name": "basma-digital-solutions",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Basma Digital Solutions website with a secure Gemini-powered assistant.",
+  "scripts": {
+    "vercel_dev": "vercel dev",
+    "build": "node scripts/validate.js",
+    "check": "node scripts/validate.js",
+    "test": "node scripts/test-chat.js"
+  },
+  "devDependencies": {
+    "vercel": "^50.0.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

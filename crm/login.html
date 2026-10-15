@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>تسجيل الدخول | Basma CRM</title>
+<link rel="icon" type="image/png" href="../assets/basma-logo-navbar.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/crm.css">
+<style>
+  body.crm-body.crm-login-body { display:flex; align-items:center; justify-content:center; min-height:100vh; padding:20px; }
+  .crm-login-card { width:100%; max-width:380px; background:var(--crm-panel); border:1px solid var(--crm-border-strong); border-radius:var(--crm-radius); padding:30px 26px; box-shadow:0 30px 70px rgba(0,0,0,.45); }
+  .crm-login-logo { display:flex; flex-direction:column; align-items:center; gap:8px; margin-bottom:20px; text-align:center; }
+  .crm-login-logo img { width:52px; height:52px; border-radius:12px; }
+  .crm-login-logo strong { font-family:'Thmanyah Sans',sans-serif; font-size:19px; color:var(--crm-text); }
+  .crm-login-logo span { font-size:12.5px; color:var(--crm-gold); }
+  .crm-login-form { display:flex; flex-direction:column; gap:14px; margin-top:8px; }
+  .crm-login-error { display:none; }
+  .crm-login-error.is-visible { display:block; }
+  .crm-login-foot { margin-top:18px; text-align:center; font-size:12px; color:var(--crm-text-mute); }
+</style>
+</head>
+<body class="crm-body crm-login-body">
+<main class="crm-login-card">
+  <div class="crm-login-logo">
+    <img src="../assets/basma-logo-navbar.webp" alt="بصمة للحلول الرقمية">
+    <strong>Basma CRM</strong>
+    <span>الدخول مخصص لفريق بصمة فقط</span>
+  </div>
+
+  <div class="crm-alert crm-alert-danger crm-login-error" id="crmLoginError" role="alert"></div>
+
+  <form class="crm-login-form" id="crmLoginForm" novalidate>
+    <div class="crm-field">
+      <label for="crmEmail">البريد الإلكتروني</label>
+      <input type="email" id="crmEmail" name="email" autocomplete="username" required>
+    </div>
+    <div class="crm-field">
+      <label for="crmPassword">كلمة المرور</label>
+      <input type="password" id="crmPassword" name="password" autocomplete="current-password" required minlength="6">
+    </div>
+    <button type="submit" class="crm-btn crm-btn-primary" id="crmLoginSubmit" style="width:100%;margin-top:4px">تسجيل الدخول</button>
+  </form>
+
+  <p class="crm-login-foot">للحصول على حساب، تواصل مع مسؤول النظام داخل بصمة.</p>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script>
+(function () {
+  "use strict";
+  var form = document.getElementById("crmLoginForm");
+  var errorBox = document.getElementById("crmLoginError");
+  var submitBtn = document.getElementById("crmLoginSubmit");
+
+  function showError(message) {
+    errorBox.textContent = message;
+    errorBox.classList.add("is-visible");
+  }
+  function hideError() {
+    errorBox.classList.remove("is-visible");
+  }
+  function redirectTarget() {
+    var params = new URLSearchParams(window.location.search);
+    var target = params.get("redirect");
+    if (!target || target.indexOf("//") !== -1 || target.indexOf(":") !== -1 || target.charAt(0) === "/") {
+      return "index.html";
+    }
+    return target;
+  }
+
+  async function boot() {
+    if (!window.supabase || !window.supabase.createClient) {
+      showError("تعذّر تحميل مكتبة Supabase. تحقّق من الاتصال بالإنترنت وأعد المحاولة.");
+      return;
+    }
+    var res, config;
+    try {
+      res = await fetch("/api/crm-config", { headers: { Accept: "application/json" } });
+      config = await res.json();
+      if (!res.ok) throw new Error(config.message || "crm_not_configured");
+    } catch (err) {
+      showError("النظام غير مُهيّأ بعد: " + (err.message || "") + ". راجع تقرير Basma CRM لمعرفة متغيرات البيئة المطلوبة.");
+      return;
+    }
+
+    var client = window.supabase.createClient(config.supabaseUrl, config.supabaseAnonKey, {
+      auth: { persistSession: true, autoRefreshToken: true }
+    });
+
+    var sessionRes = await client.auth.getSession();
+    if (sessionRes.data && sessionRes.data.session) {
+      window.location.href = redirectTarget();
+      return;
+    }
+
+    form.addEventListener("submit", async function (event) {
+      event.preventDefault();
+      hideError();
+      var email = document.getElementById("crmEmail").value.trim();
+      var password = document.getElementById("crmPassword").value;
+      if (!email || !password) {
+        showError("الرجاء إدخال البريد الإلكتروني وكلمة المرور.");
+        return;
+      }
+      submitBtn.disabled = true;
+      submitBtn.textContent = "جارٍ الدخول…";
+      try {
+        var signInRes = await client.auth.signInWithPassword({ email: email, password: password });
+        if (signInRes.error) {
+          showError("بيانات الدخول غير صحيحة، أو الحساب غير موجود.");
+          return;
+        }
+        window.location.href = redirectTarget();
+      } catch (err) {
+        showError("تعذّر تسجيل الدخول حاليًا. حاول مرة أخرى.");
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = "تسجيل الدخول";
+      }
+    });
+  }
+
+  boot();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>قوالب التواصل | Basma CRM</title>
+<link rel="icon" type="image/png" href="../assets/basma-logo-navbar.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/crm.css">
+</head>
+<body class="crm-body">
+
+<div class="crm-modal-overlay" id="crmModalOverlay">
+  <div class="crm-modal">
+    <h3 id="crmModalTitle">قالب جديد</h3>
+    <form id="crmForm">
+      <input type="hidden" id="rowId">
+      <div class="crm-form-grid">
+        <div class="crm-field"><label for="fType">النوع *</label>
+          <select id="fType" required>
+            <option value="email">بريد إلكتروني</option>
+            <option value="linkedin">LinkedIn</option>
+            <option value="whatsapp">واتساب</option>
+            <option value="phone">نص مكالمة هاتفية</option>
+            <option value="proposal">عرض سعر</option>
+            <option value="meeting">اجتماع</option>
+          </select>
+        </div>
+        <div class="crm-field"><label for="fName">اسم القالب *</label><input id="fName" required></div>
+      </div>
+      <div class="crm-field" style="margin-top:12px"><label for="fSubject">العنوان / الموضوع</label><input id="fSubject" placeholder="يُستخدم للبريد الإلكتروني بشكل أساسي — غير مطلوب لنص المكالمة"></div>
+      <div class="crm-field" style="margin-top:12px"><label for="fBody">المحتوى *</label><textarea id="fBody" required style="min-height:160px"></textarea></div>
+      <div class="crm-card" style="margin-top:10px;padding:10px 14px">
+        <p class="crm-muted" style="font-size:12px;margin:0 0 6px">المتغيرات المتاحة (تُستبدل تلقائيًا عند الإرسال من مركز التواصل الموحّد، وفي المعاينة الحية أدناه):</p>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;font-size:11.5px" dir="ltr">
+          <code>{{contact_name}}</code><code>{{first_name}}</code><code>{{company_name}}</code><code>{{country}}</code>
+          <code>{{city}}</code><code>{{website}}</code><code>{{industry}}</code><code>{{sender_name}}</code>
+        </div>
+      </div>
+      <div class="crm-card" style="margin-top:10px;padding:10px 14px">
+        <p class="crm-muted" style="font-size:12px;margin:0 0 8px">معاينة حية — اختر شركة (وجهة اتصال اختياريًا) حقيقية لمشاهدة الرسالة بعد استبدال المتغيرات:</p>
+        <div class="crm-form-grid">
+          <div class="crm-field"><label>الشركة</label><select id="fPreviewCompany"><option value="">— بدون معاينة —</option></select></div>
+          <div class="crm-field"><label>جهة الاتصال</label><select id="fPreviewContact"><option value="">— بدون جهة اتصال —</option></select></div>
+        </div>
+        <div style="margin-top:8px"><strong id="fPreviewSubject" style="display:block;font-size:13px;color:#fbf7f0">—</strong>
+        <div id="fPreviewBody" style="font-size:12.5px;color:#cfcfcf;white-space:pre-wrap;margin-top:4px">—</div></div>
+      </div>
+      <div class="crm-form-actions">
+        <button type="button" class="crm-btn" id="crmCancel">إلغاء</button>
+        <button type="submit" class="crm-btn crm-btn-primary" id="crmSave">حفظ</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="assets/crm-client.js"></script>
+<script src="assets/crm-composer.js"></script>
+<script>
+(function () {
+  "use strict";
+  var CRM = window.Basma.CRM;
+  var TYPE_LABELS = { email: "بريد إلكتروني", linkedin: "LinkedIn", whatsapp: "واتساب", phone: "نص مكالمة هاتفية", proposal: "عرض سعر", meeting: "اجتماع" };
+  var TYPE_BADGE = { email: "gold", linkedin: "gold", whatsapp: "success", phone: "warning", proposal: "warning", meeting: "mute" };
+  var db, who, rows = [], currentType = "";
+  var previewCompanies = null, previewContacts = [], previewSenderName = "";
+
+  function renderBlocked() {
+    document.getElementById("crmApp").innerHTML =
+      '<div class="crm-card crm-empty">' +
+      '<h2 style="color:#fbf7f0">قوالب التواصل غير مُفعّلة بعد</h2>' +
+      '<p>جدول <code>crm_outreach_templates</code> غير موجود بعد. شغّل ملف <code>CRM-OUTREACH-HUB.sql</code> في محرر SQL في Supabase أولًا، ثم أعد تحميل هذه الصفحة.</p>' +
+      "</div>";
+  }
+  function isMigrationMissingError(err) {
+    var msg = (err && err.message) || "";
+    return /crm_outreach_templates/i.test(msg) && (/does not exist/i.test(msg) || /schema cache/i.test(msg) || (err && err.code === "42P01"));
+  }
+
+  async function openModal(row) {
+    document.getElementById("crmModalTitle").textContent = row ? "تعديل القالب" : "قالب جديد";
+    document.getElementById("rowId").value = row ? row.id : "";
+    document.getElementById("fType").value = (row && row.type) || "email";
+    document.getElementById("fName").value = row ? row.name : "";
+    document.getElementById("fSubject").value = (row && row.subject) || "";
+    document.getElementById("fBody").value = (row && row.body) || "";
+    document.getElementById("fPreviewContact").innerHTML = '<option value="">— بدون جهة اتصال —</option>';
+    document.getElementById("fPreviewCompany").value = "";
+    previewContacts = [];
+    await ensurePreviewCompaniesLoaded();
+    updatePreview();
+    document.getElementById("crmModalOverlay").classList.add("is-open");
+  }
+  function closeModal() { document.getElementById("crmModalOverlay").classList.remove("is-open"); }
+
+  // ---------- Live preview (section 16: "Preview with real selected
+  // company/contact") — reuses window.Basma.Composer's renderTemplate/
+  // buildVars, so template rendering logic exists in exactly one place. ----
+  async function ensurePreviewCompaniesLoaded() {
+    if (previewCompanies !== null) return;
+    try {
+      var res = await db.from("crm_companies").select("id,name,country,city,website,industry,email").order("name", { ascending: true }).limit(50);
+      previewCompanies = res.data || [];
+      document.getElementById("fPreviewCompany").innerHTML = '<option value="">— بدون معاينة —</option>' +
+        previewCompanies.map(function (c) { return '<option value="' + c.id + '">' + CRM.escape(c.name) + "</option>"; }).join("");
+      previewSenderName = await window.Basma.Composer.getSenderName(db);
+    } catch (e) { previewCompanies = []; }
+  }
+
+  async function onPreviewCompanyChange() {
+    var companyId = document.getElementById("fPreviewCompany").value;
+    previewContacts = [];
+    if (companyId) {
+      try {
+        var res = await db.from("crm_contacts").select("*").eq("company_id", companyId);
+        previewContacts = res.data || [];
+      } catch (e) { /* non-fatal — preview just shows no contact-specific vars */ }
+    }
+    document.getElementById("fPreviewContact").innerHTML = '<option value="">— بدون جهة اتصال —</option>' +
+      previewContacts.map(function (c) { return '<option value="' + c.id + '">' + CRM.escape(c.full_name) + (c.is_primary ? " (أساسي)" : "") + "</option>"; }).join("");
+    updatePreview();
+  }
+
+  function updatePreview() {
+    var companyId = document.getElementById("fPreviewCompany").value;
+    var company = (previewCompanies || []).filter(function (c) { return c.id === companyId; })[0] || null;
+    var contactId = document.getElementById("fPreviewContact").value;
+    var contact = previewContacts.filter(function (c) { return c.id === contactId; })[0] || null;
+    var vars = window.Basma.Composer.buildVars(company, contact, previewSenderName);
+    var subjectTpl = document.getElementById("fSubject").value;
+    var bodyTpl = document.getElementById("fBody").value;
+    document.getElementById("fPreviewSubject").textContent = subjectTpl ? window.Basma.Composer.renderTemplate(subjectTpl, vars) : (company ? "(بدون موضوع)" : "—");
+    document.getElementById("fPreviewBody").textContent = bodyTpl ? window.Basma.Composer.renderTemplate(bodyTpl, vars) : "—";
+  }
+
+  async function save(event) {
+    event.preventDefault();
+    var id = document.getElementById("rowId").value;
+    var payload = {
+      type: document.getElementById("fType").value,
+      name: document.getElementById("fName").value.trim(),
+      subject: document.getElementById("fSubject").value.trim() || null,
+      body: document.getElementById("fBody").value.trim()
+    };
+    if (!payload.name || !payload.body) { CRM.toast("اسم القالب والمحتوى مطلوبان.", "danger"); return; }
+    var btn = document.getElementById("crmSave"); btn.disabled = true;
+    try {
+      var res = id ? await db.from("crm_outreach_templates").update(payload).eq("id", id) : await db.from("crm_outreach_templates").insert(payload);
+      if (res.error) throw res.error;
+      CRM.toast(id ? "تم التحديث." : "تمت الإضافة.", "info");
+      closeModal();
+      await load();
+    } catch (err) { CRM.toast("تعذّر الحفظ: " + (err.message || ""), "danger"); }
+    finally { btn.disabled = false; }
+  }
+
+  async function remove(id) {
+    if (!CRM.confirm("حذف هذا القالب نهائيًا؟")) return;
+    try {
+      var res = await db.from("crm_outreach_templates").delete().eq("id", id);
+      if (res.error) throw res.error;
+      CRM.toast("تم الحذف.", "info");
+      await load();
+    } catch (err) { CRM.toast("تعذّر الحذف: " + (err.message || ""), "danger"); }
+  }
+
+  async function copyBody(id) {
+    var row = rows.filter(function (r) { return r.id === id; })[0];
+    if (!row) return;
+    try {
+      await navigator.clipboard.writeText(row.body || "");
+      CRM.toast("تم نسخ المحتوى.", "info");
+    } catch (e) { CRM.toast("تعذّر النسخ التلقائي — انسخ النص يدويًا من نافذة التعديل.", "warning"); }
+  }
+
+  function render() {
+    var wrap = document.getElementById("crmTableWrap"), empty = document.getElementById("crmEmpty");
+    if (!rows.length) { wrap.style.display = "none"; empty.style.display = "block"; return; }
+    wrap.style.display = "block"; empty.style.display = "none";
+    document.getElementById("crmTableBody").innerHTML = rows.map(function (r) {
+      var preview = (r.body || "").slice(0, 80).replace(/\n/g, " ");
+      return "<tr><td><span class=\"crm-badge crm-badge-" + (TYPE_BADGE[r.type] || "mute") + "\">" + (TYPE_LABELS[r.type] || r.type) + "</span></td>" +
+        "<td><strong>" + CRM.escape(r.name) + "</strong></td>" +
+        "<td>" + CRM.escape(r.subject || "—") + "</td>" +
+        "<td class=\"crm-muted\">" + CRM.escape(preview) + (r.body && r.body.length > 80 ? "…" : "") + "</td>" +
+        "<td style=\"white-space:nowrap;display:flex;gap:6px\">" +
+        "<button class=\"crm-btn crm-btn-sm crm-copy\" data-id=\"" + r.id + "\">نسخ</button>" +
+        (who.can_write ? "<button class=\"crm-btn crm-btn-sm crm-edit\" data-id=\"" + r.id + "\">تعديل</button>" : "") +
+        (who.is_admin ? "<button class=\"crm-btn crm-btn-sm crm-btn-danger crm-del\" data-id=\"" + r.id + "\">حذف</button>" : "") +
+        "</td></tr>";
+    }).join("");
+    document.querySelectorAll(".crm-edit").forEach(function (b) { b.addEventListener("click", function () { openModal(rows.filter(function (r) { return r.id === b.dataset.id; })[0]); }); });
+    document.querySelectorAll(".crm-del").forEach(function (b) { b.addEventListener("click", function () { remove(b.dataset.id); }); });
+    document.querySelectorAll(".crm-copy").forEach(function (b) { b.addEventListener("click", function () { copyBody(b.dataset.id); }); });
+  }
+
+  async function load() {
+    try {
+      var query = db.from("crm_outreach_templates").select("*");
+      if (currentType) query = query.eq("type", currentType);
+      query = query.order("type", { ascending: true }).order("name", { ascending: true });
+      var res = await query;
+      if (res.error) throw res.error;
+      rows = res.data || [];
+      render();
+    } catch (err) {
+      if (isMigrationMissingError(err)) { renderBlocked(); return; }
+      CRM.toast("تعذّر التحميل: " + (err.message || ""), "danger");
+    }
+  }
+
+  async function boot() {
+    var ctx = await CRM.boot({ activeKey: "outreach-templates", title: "قوالب التواصل", sub: "قوالب جاهزة للبريد وLinkedIn وواتساب وعروض الأسعار والاجتماعات" });
+    if (!ctx) return;
+    db = ctx.client; who = ctx.who;
+    document.getElementById("crmTopbarActions").innerHTML = who.can_write ? '<button class="crm-btn crm-btn-primary" id="crmAdd">+ قالب جديد</button>' : "";
+
+    document.getElementById("crmApp").innerHTML =
+      '<div class="crm-card"><div class="crm-filters">' +
+      '<div class="crm-field"><label>النوع</label><select id="fvType"><option value="">الكل</option>' + Object.keys(TYPE_LABELS).map(function (k) { return '<option value="' + k + '">' + TYPE_LABELS[k] + "</option>"; }).join("") + "</select></div>" +
+      "</div></div>" +
+      '<div class="crm-table-wrap" id="crmTableWrap"><table class="crm-table"><thead><tr><th>النوع</th><th>الاسم</th><th>الموضوع</th><th>مقتطف</th><th>الإجراءات</th></tr></thead><tbody id="crmTableBody"></tbody></table></div>' +
+      '<div class="crm-card crm-empty" id="crmEmpty" style="display:none"><h2 style="color:#fbf7f0">لا توجد قوالب بعد</h2><p>أضف أول قالب لتسريع فريق المبيعات.</p></div>';
+
+    if (who.can_write) document.getElementById("crmAdd").addEventListener("click", function () { openModal(null); });
+    document.getElementById("crmCancel").addEventListener("click", closeModal);
+    document.getElementById("crmForm").addEventListener("submit", save);
+    document.getElementById("fvType").addEventListener("change", function (e) { currentType = e.target.value; load(); });
+    document.getElementById("fPreviewCompany").addEventListener("change", onPreviewCompanyChange);
+    document.getElementById("fPreviewContact").addEventListener("change", updatePreview);
+    document.getElementById("fSubject").addEventListener("input", updatePreview);
+    document.getElementById("fBody").addEventListener("input", updatePreview);
+
+    await load();
+  }
+
+  boot();
+})();
+</script>
+</body>
+</html>
