@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>التسجيل في دورة التصميم الجرافيكي الشاملة | بصمة للحلول الرقمية</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Cairo', sans-serif; background: radial-gradient(circle at top, #0b1d3a, #050b18); }
+    .gold-glow { text-shadow: 0 0 20px rgba(212, 175, 55, 0.4); }
+  </style>
+</head>
+<body class="min-h-screen text-white flex items-center justify-center p-4">
+
+  <div class="max-w-2xl w-full bg-[#0b1736]/95 border border-cyan-500/30 rounded-3xl shadow-2xl p-6 md:p-10 backdrop-blur-md">
+    
+    <!-- Header -->
+    <div class="text-center mb-8">
+      <div class="inline-block bg-gradient-to-r from-amber-500 to-yellow-400 text-slate-950 font-extrabold px-5 py-1.5 rounded-full text-sm shadow-md mb-3">
+        بصمة للحلول الرقمية 💡
+      </div>
+      <h1 class="text-3xl md:text-4xl font-extrabold text-white mb-2">دورة التصميم الجرافيكي الشاملة</h1>
+      <p class="text-cyan-400 font-bold text-lg">بإشراف المدربة المبدعة: م. سجود أبو عواد</p>
+      <p class="text-sm text-gray-300 mt-2">انتقل من الصفر إلى الاحتراف وابدأ بناء معرض أعمالك الخاص!</p>
+    </div>
+
+    <!-- Teaser Price & Payment Methods Box -->
+    <div class="bg-gradient-to-r from-blue-950/80 to-indigo-950/80 border border-amber-500/40 rounded-2xl p-5 mb-8 text-center shadow-inner">
+      <div class="text-amber-400 font-extrabold text-xl mb-1 gold-glow">🎁 مفاجأة السعر الاستثنائي والتشويقي!</div>
+      <p class="text-sm text-gray-200 mb-3">سعر مغري جداً ومناسب لكل الطلاب 🤫 (سيتم الكشف عن الخصومات الكبرى يوم السبت القادم)</p>
+      
+      <div class="border-t border-blue-900/60 pt-3 mt-3">
+        <span class="text-xs text-cyan-300 font-semibold block mb-2">طرق الدفع المتاحة لتأكيد مقعدك لاحقاً:</span>
+        <div class="flex justify-center gap-4">
+          <span class="bg-[#11224d] border border-cyan-500/40 text-cyan-300 px-4 py-1.5 rounded-xl text-xs font-bold shadow">💳 PalPay (بال باي)</span>
+          <span class="bg-[#11224d] border border-cyan-500/40 text-cyan-300 px-4 py-1.5 rounded-xl text-xs font-bold shadow">📱 Jawwal Pay (جوال باي)</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Social Gate Section -->
+    <div class="bg-slate-900/80 border border-cyan-500/30 rounded-2xl p-5 mb-8">
+      <h3 class="text-sm font-bold text-amber-400 mb-3 text-center">✨ شروط تفعيل التسجيل (متابعة منصات بصمة والمؤسس):</h3>
+      <div class="space-y-3">
+        <a href="https://www.youtube.com/@ahme_sh7" target="_blank" onclick="unlockStep(1)" id="btn-yt" class="flex items-center justify-between bg-[#11224d] hover:bg-blue-900 border border-blue-800 p-3 rounded-xl transition text-sm font-semibold">
+          <span>📺 اشترك في قناة اليوتيوب (أحمد شوقي)</span>
+          <span id="badge-1" class="text-xs bg-amber-500 text-slate-950 px-2.5 py-1 rounded-lg font-bold">اضغط للمتابعة</span>
+        </a>
+
+        <a href="https://whatsapp.com" target="_blank" onclick="unlockStep(2)" id="btn-wa" class="flex items-center justify-between bg-[#11224d] hover:bg-blue-900 border border-blue-800 p-3 rounded-xl transition text-sm font-semibold">
+          <span>💬 انضم إلى قناة الواتساب الرسمية</span>
+          <span id="badge-2" class="text-xs bg-amber-500 text-slate-950 px-2.5 py-1 rounded-lg font-bold">اضغط للمتابعة</span>
+        </a>
+
+        <a href="https://instagram.com" target="_blank" onclick="unlockStep(3)" id="btn-ig" class="flex items-center justify-between bg-[#11224d] hover:bg-blue-900 border border-blue-800 p-3 rounded-xl transition text-sm font-semibold">
+          <span>📸 تابع حساب الإنستغرام لوكالة بصمة</span>
+          <span id="badge-3" class="text-xs bg-amber-500 text-slate-950 px-2.5 py-1 rounded-lg font-bold">اضغط للمتابعة</span>
+        </a>
+      </div>
+    </div>
+
+    <!-- Registration Form -->
+    <form id="regForm" onsubmit="handleSubmit(event)" class="space-y-4 opacity-50 pointer-events-none transition duration-300">
+      <div id="lock-msg" class="text-center text-xs text-amber-400 font-bold mb-2">🔒 يرجى إتمام خطوات المتابعة بالأعلى لفتح نموذج التسجيل</div>
+
+      <div>
+        <label class="block text-sm font-semibold mb-1">الاسم الثلاثي (للشهادة) *</label>
+        <input type="text" id="fullName" required placeholder="أدخل اسمك الكامل" class="w-full p-3 rounded-xl bg-[#11224d] border border-blue-800 focus:border-amber-400 focus:outline-none text-white">
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-sm font-semibold mb-1">البريد الإلكتروني *</label>
+          <input type="email" id="email" required placeholder="name@example.com" class="w-full p-3 rounded-xl bg-[#11224d] border border-blue-800 focus:border-amber-400 focus:outline-none text-white">
+        </div>
+        <div>
+          <label class="block text-sm font-semibold mb-1">رقم الواتساب (مع رمز الدولة) *</label>
+          <input type="tel" id="whatsapp" required placeholder="+97059XXXXXXX" class="w-full p-3 rounded-xl bg-[#11224d] border border-blue-800 focus:border-amber-400 focus:outline-none text-white">
+        </div>
+      </div>
+
+      <div>
+        <label class="block text-sm font-semibold mb-1">مستواك الحالي في التصميم *</label>
+        <select id="level" required class="w-full p-3 rounded-xl bg-[#11224d] border border-blue-800 focus:border-amber-400 focus:outline-none text-white">
+          <option value="">اختر مستواك...</option>
+          <option value="مبتدئ تماماً (من الصفر)">مبتدئ تماماً (من الصفر)</option>
+          <option value="أعرف الأساسيات أو أستخدم Canva">أعرف الأساسيات أو أستخدم Canva</option>
+          <option value="لدي خبرة وأريد الاحتراف">لدي خبرة وأريد الاحتراف</option>
+        </select>
+      </div>
+
+      <button type="submit" id="submit-btn" class="w-full bg-gradient-to-r from-amber-500 to-yellow-400 hover:from-amber-400 hover:to-yellow-300 text-slate-950 font-extrabold py-3.5 rounded-xl transition shadow-xl text-lg mt-4">
+        إرسال تفاصيل التسجيل عبر الواتساب 🚀
+      </button>
+    </form>
+
+  </div>
+
+  <script>
+    let stepsCompleted = { 1: false, 2: false, 3: false };
+
+    function unlockStep(step) {
+      stepsCompleted[step] = true;
+      let badge = document.getElementById(`badge-${step}`);
+      badge.innerText = "تمت المتابعة ✓";
+      badge.className = "text-xs bg-emerald-500 text-slate-950 px-2.5 py-1 rounded-lg font-bold";
+      
+      checkAllUnlocked();
+    }
+
+    function checkAllUnlocked() {
+      if (stepsCompleted[1] && stepsCompleted[2] && stepsCompleted[3]) {
+        let form = document.getElementById('regForm');
+        form.classList.remove('opacity-50', 'pointer-events-none');
+        document.getElementById('lock-msg').style.display = 'none';
+      }
+    }
+
+    function handleSubmit(e) {
+      e.preventDefault();
+      
+      let name = document.getElementById('fullName').value;
+      let email = document.getElementById('email').value;
+      let wa = document.getElementById('whatsapp').value;
+      let level = document.getElementById('level').value;
+
+      // استبدل الرقم أدناه برقم الواتساب الخاص بك مع مفتاح الدولة بدون علامة +
+      let targetNumber = "970590000000"; 
+
+      let message = `مرحباً بصمة للحلول الرقمية، أرغب بالتسجيل في دورة التصميم الجرافيكي الشاملة مع م. سجود أبو عواد.%0A%0A` +
+                    `👤 الاسم: ${name}%0A` +
+                    `📧 البريد: ${email}%0A` +
+                    `📱 الواتساب: ${wa}%0A` +
+                    `📊 المستوى: ${level}%0A%0A` +
+                    `بانتظار تفاصيل السعر الاستثنائي والخصومات وطريقة الدفع (PalPay / Jawwal Pay).`;
+
+      window.open(`https://wa.me/${targetNumber}?text=${message}`, '_blank');
+    }
+  </script>
+</body>
+</html>
